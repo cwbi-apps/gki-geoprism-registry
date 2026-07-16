@@ -27,4 +27,7 @@ COPY target/appcfg $CATALINA_HOME/appcfg
 RUN wget -nv -O $CATALINA_HOME/bin/wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
 RUN chmod +x $CATALINA_HOME/bin/wait-for-it.sh
 
-#CMD ["$CATALINA_HOME/bin/wait-for-it.sh", "-t", 0, "database:$POSTGRES_PORT", "--"]
+COPY entrypoint.sh /usr/local/bin/geoprism-entrypoint.sh
+RUN chmod +x /usr/local/bin/geoprism-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/geoprism-entrypoint.sh"]
