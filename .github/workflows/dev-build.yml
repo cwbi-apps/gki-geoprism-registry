@@ -12,7 +12,7 @@ concurrency:
 
 env:
   AWS_REGION: us-gov-west-1
-  ECR_REPOSITORY: kaleidoscope-gki/geoprism
+  ECR_REPOSITORY: kaleidoscope-gki/geoprism-registry
   NODE_VERSION: "22"
   JAVA_VERSION: "17"
 
@@ -68,7 +68,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws-us-gov:iam::718787032875:role/github-actions-ecr-kaleidoscope-gki-geoprism
+          role-to-assume: arn:aws-us-gov:iam::718787032875:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
