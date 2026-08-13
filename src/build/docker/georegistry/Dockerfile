@@ -27,6 +27,11 @@ COPY target/appcfg $CATALINA_HOME/appcfg
 RUN wget -nv -O $CATALINA_HOME/bin/wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
 RUN chmod +x $CATALINA_HOME/bin/wait-for-it.sh
 
+# Send Tomcat localhost logs to container stderr/stdout so ECS can capture them
+RUN sed -i \
+    's|org.apache.catalina.core.ContainerBase.\[Catalina\].\[localhost\].handlers = 2localhost.org.apache.juli.AsyncFileHandler|org.apache.catalina.core.ContainerBase.[Catalina].[localhost].handlers = java.util.logging.ConsoleHandler|' \
+    $CATALINA_HOME/conf/logging.properties
+
 COPY entrypoint.sh /usr/local/bin/geoprism-entrypoint.sh
 RUN chmod +x /usr/local/bin/geoprism-entrypoint.sh
 
