@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 import org.commongeoregistry.adapter.constants.DefaultAttribute;
 import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
@@ -51,6 +52,7 @@ import net.geoprism.registry.etl.upload.ImportConfiguration.ImportStrategy;
 import net.geoprism.registry.etl.upload.ObjectRecordedErrorException;
 import net.geoprism.registry.excel.MapFeatureRow;
 import net.geoprism.registry.graph.BusinessType;
+import net.geoprism.registry.io.view.BusinessObjectImportConfigurationDTO;
 import net.geoprism.registry.jobs.ImportHistory;
 import net.geoprism.registry.model.BusinessObject;
 import net.geoprism.registry.service.business.BusinessObjectBusinessServiceIF;
@@ -60,7 +62,6 @@ import net.geoprism.registry.service.request.ExcelService;
 import net.geoprism.registry.test.FastTestDataset;
 import net.geoprism.registry.test.TestDataSet;
 import net.geoprism.registry.test.USATestData;
-import net.geoprism.registry.view.BusinessObjectImportConfigurationDTO;
 import net.geoprism.registry.view.BusinessTypeDTO;
 import net.geoprism.registry.view.ImportConfigurationView;
 import net.geoprism.registry.view.ImportHistoryView;
@@ -189,7 +190,7 @@ public class BusinessObjectImporterTest extends FastDatasetTest implements Insta
         importer.importRow(new MapFeatureRow(row, 0L));
       }
 
-      BusinessObject result = this.bObjectService.get(type, attributeType.getCode(), basicValue);
+      BusinessObject result = this.bObjectService.get(type, attributeType.getCode(), basicValue).orElse(null);
 
       try
       {
@@ -263,7 +264,7 @@ public class BusinessObjectImporterTest extends FastDatasetTest implements Insta
         importer.importRow(new MapFeatureRow(row, 0L));
       }
 
-      BusinessObject result = this.bObjectService.get(type, attributeType.getCode(), value);
+      BusinessObject result = this.bObjectService.get(type, attributeType.getCode(), value).orElse(null);
 
       try
       {
@@ -313,7 +314,7 @@ public class BusinessObjectImporterTest extends FastDatasetTest implements Insta
 
         Assert.assertFalse(configuration.hasExceptions());
 
-        BusinessObject result = this.bObjectService.getByCode(type, TEST_CODE);
+        BusinessObject result = this.bObjectService.getByCode(type, TEST_CODE).orElse(null);
 
         Assert.assertEquals(result.getValue(attributeType.getCode()), value);
       }
@@ -415,8 +416,10 @@ public class BusinessObjectImporterTest extends FastDatasetTest implements Insta
     });
   }
 
-  public void assertAndDelete(BusinessObject o1)
+  public void assertAndDelete(Optional<BusinessObject> optional)
   {
+    BusinessObject o1 = optional.orElse(null);
+
     try
     {
       Assert.assertNotNull(o1);

@@ -51,13 +51,14 @@ public class RelationshipVisualizationController extends RunwaySpringController
       @NotEmpty @RequestParam(name = "graphTypeCode") String graphTypeCode, //
       @NotEmpty @RequestParam(name = "sourceVertex") String sourceVertex, //
       @RequestParam(name = "date", required = false) Date date, //
-      @RequestParam(name = "boundsWKT", required = false) String boundsWKT)
+      @RequestParam(name = "boundsWKT", required = false) String boundsWKT,
+      @RequestParam(name = "nullDateIsLatest", required = false) Boolean nullDateIsLatest)
   {
-    JsonElement json = this.service.tree(this.getSessionId(), date, relationshipType, graphTypeCode, sourceVertex, boundsWKT);
+    JsonElement json = this.service.tree(this.getSessionId(), date, relationshipType, graphTypeCode, sourceVertex, boundsWKT, nullDateIsLatest);
 
     return new ResponseEntity<String>(json.toString(), HttpStatus.OK);
   }
-  
+
   @GetMapping(API_PATH + "/treeAsGeoJson")
   public ResponseEntity<String> treeAsGeoJson( //
       @RequestParam(name = "relationshipType", required = false) String relationshipType, //
@@ -77,6 +78,22 @@ public class RelationshipVisualizationController extends RunwaySpringController
       @NotEmpty @RequestParam(name = "typeCode") String typeCode)
   {
     JsonElement json = this.service.getRelationshipTypes(this.getSessionId(), VertexView.ObjectType.valueOf(objectType), typeCode);
+
+    return new ResponseEntity<String>(json.toString(), HttpStatus.OK);
+  }
+
+  @GetMapping(API_PATH + "/relationship-counts")
+  public ResponseEntity<String> relationshipCounts(
+      @NotEmpty @RequestParam(name = "objectType") String objectType,
+      @NotEmpty @RequestParam(name = "typeCode") String typeCode,
+      @NotEmpty @RequestParam(name = "sourceVertex") String sourceVertex)
+  {
+    JsonElement json = this.service.getRelationshipTypeCounts(
+        this.getSessionId(),
+        VertexView.ObjectType.valueOf(objectType),
+        typeCode,
+        sourceVertex
+    );
 
     return new ResponseEntity<String>(json.toString(), HttpStatus.OK);
   }

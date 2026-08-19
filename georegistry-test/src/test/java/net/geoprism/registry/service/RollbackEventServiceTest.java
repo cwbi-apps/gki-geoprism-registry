@@ -73,8 +73,6 @@ public class RollbackEventServiceTest extends EventDatasetTest implements Instan
 
     this.store.truncate();
 
-    this.projection.clearCache();
-
     testData.tearDownInstanceData();
   }
 
@@ -143,7 +141,7 @@ public class RollbackEventServiceTest extends EventDatasetTest implements Instan
 
     this.service.rollback(dto);
 
-    Assert.assertNull(this.bObjectService.getByCode(btype, pObject.getCode()));
+    Assert.assertNull(this.bObjectService.getByCode(btype, pObject.getCode()).orElse(null));
 
     Assert.assertEquals(Long.valueOf(0), this.store.size());
   }
@@ -170,7 +168,7 @@ public class RollbackEventServiceTest extends EventDatasetTest implements Instan
 
     this.service.rollback(dto);
 
-    BusinessObject test = this.bObjectService.getByCode(btype, pObject.getCode());
+    BusinessObject test = this.bObjectService.getByCode(btype, pObject.getCode()).orElse(null);
 
     Assert.assertNotNull(test);
     Assert.assertEquals(false, test.getValue("testBoolean"));
@@ -193,7 +191,7 @@ public class RollbackEventServiceTest extends EventDatasetTest implements Instan
 
     this.service.rollback(dto);
 
-    Assert.assertNull(this.cObjectService.getByCode(cClass, concept.getCode()));
+    Assert.assertNull(this.cObjectService.getByCode(cClass, concept.getCode()).orElse(null));
 
     Assert.assertEquals(Long.valueOf(0), this.store.size());
   }
@@ -220,7 +218,7 @@ public class RollbackEventServiceTest extends EventDatasetTest implements Instan
 
     this.service.rollback(dto);
 
-    ConceptObject test = this.cObjectService.getByCode(cClass, concept.getCode());
+    ConceptObject test = this.cObjectService.getByCode(cClass, concept.getCode()).orElse(null);
 
     Assert.assertNotNull(test);
     Assert.assertNull(test.getValue("testBoolean"));

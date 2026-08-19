@@ -4,6 +4,7 @@
 package net.geoprism.registry.hierarchy;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
 import org.junit.Assert;
@@ -25,7 +26,7 @@ import net.geoprism.registry.graph.BusinessType;
 import net.geoprism.registry.service.business.BusinessEdgeTypeBusinessServiceIF;
 import net.geoprism.registry.service.business.BusinessTypeBusinessServiceIF;
 import net.geoprism.registry.test.FastTestDataset;
-import net.geoprism.registry.view.BusinessEdgeTypeView;
+import net.geoprism.registry.view.BusinessEdgeTypeDTO;
 import net.geoprism.registry.view.BusinessTypeDTO;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, classes = TestApplication.class)
@@ -100,7 +101,7 @@ public class BusinessEdgeTypeTest extends FastDatasetTest implements InstanceTes
     LocalizedValue label = new LocalizedValue("Test Label");
     LocalizedValue description = new LocalizedValue("Test Description");
 
-    BusinessEdgeType type = this.bEdgeService.create(BusinessEdgeTypeView.build(FastTestDataset.ORG_CGOV.getCode(), code, label, description, parentType.getCode(), childType.getCode()));
+    BusinessEdgeType type = this.bEdgeService.create(BusinessEdgeTypeDTO.build(FastTestDataset.ORG_CGOV.getCode(), code, label, description, parentType.getCode(), childType.getCode()));
 
     try
     {
@@ -128,7 +129,7 @@ public class BusinessEdgeTypeTest extends FastDatasetTest implements InstanceTes
 
     try
     {
-      BusinessEdgeTypeView view = new BusinessEdgeTypeView();
+      BusinessEdgeTypeDTO view = new BusinessEdgeTypeDTO();
       view.setLabel(new LocalizedValue("Updated Label"));
       view.setDescription(new LocalizedValue("Updated Description"));
 
@@ -172,10 +173,10 @@ public class BusinessEdgeTypeTest extends FastDatasetTest implements InstanceTes
 
     try
     {
-      BusinessEdgeType result = this.bEdgeService.getByMdEdge(type.getMdEdge());
+      Optional<BusinessEdgeType> result = this.bEdgeService.getByMdEdge(type.getMdEdge());
 
-      Assert.assertNotNull(result);
-      Assert.assertEquals(type.getCode(), result.getCode());
+      Assert.assertTrue(result.isPresent());
+      Assert.assertEquals(type.getCode(), result.get().getCode());
     }
     finally
     {
@@ -209,7 +210,7 @@ public class BusinessEdgeTypeTest extends FastDatasetTest implements InstanceTes
 
   public BusinessEdgeType createTestRelationship()
   {
-    return this.bEdgeService.create(BusinessEdgeTypeView.build(FastTestDataset.ORG_CGOV.getCode(), "TEST", new LocalizedValue("Test Label"), new LocalizedValue("Test Description"), parentType.getCode(), childType.getCode()));
+    return this.bEdgeService.create(BusinessEdgeTypeDTO.build(FastTestDataset.ORG_CGOV.getCode(), "TEST", new LocalizedValue("Test Label"), new LocalizedValue("Test Description"), parentType.getCode(), childType.getCode()));
   }
 
 }

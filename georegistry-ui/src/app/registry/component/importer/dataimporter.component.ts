@@ -23,16 +23,15 @@ import { FileUploader, FileUploaderOptions, FileUploadModule } from "ng2-file-up
 import { HttpErrorResponse } from "@angular/common/http";
 
 import { DateFieldComponent, ErrorHandler } from "@shared/component";
-import { LocalizationService, AuthService, EventService, ExternalSystemService } from "@shared/service";
-import { HierarchyService, IOService } from "@registry/service";
-import { ExternalSystem } from "@shared/model/core";
+import { LocalizationService, EventService, ExternalSystemService } from "@shared/service";
+import { HierarchyService } from "@registry/service";
 
 import { ImportModalComponent } from "./modals/import-modal.component";
 import { ImportStrategy } from "@registry/model/constants";
 import { HierarchyGroupedTypeView, TypeGroupedHierachyView } from "@registry/model/hierarchy";
 import { environment } from "src/environments/environment";
-import { Source } from "@registry/model/source";
-import { SourceService } from "@registry/service/source.service";
+import { DataSource } from "@registry/model/source";
+import { DataSourceService } from "@registry/service/data-source.service";
 import { BooleanFieldComponent } from "../../../shared/component/form-fields/boolean-field/boolean-field.component";
 import { DateFieldComponent as DateFieldComponent_1 } from "../../../shared/component/form-fields/date-field/date-field.component";
 import { FormsModule } from "@angular/forms";
@@ -45,15 +44,13 @@ import { NgIf, NgClass, NgFor } from "@angular/common";
     templateUrl: "./dataimporter.component.html",
     styleUrls: ["./dataimporter.css"],
     standalone: true,
-    imports: [NgIf, NgClass, LocalizeComponent, FormsModule, NgFor, DateFieldComponent_1, BooleanFieldComponent, FileUploadModule]
+    imports: [NgIf, LocalizeComponent, FormsModule, NgFor, DateFieldComponent_1, BooleanFieldComponent, FileUploadModule]
 })
 export class DataImporterComponent implements OnInit {
 
     @ViewChildren("dateFieldComponents") dateFieldComponentsArray: QueryList<DateFieldComponent>;
 
     currentDate: Date = new Date();
-
-    showImportConfig: boolean = false;
 
     isValid: boolean = false;
 
@@ -116,26 +113,14 @@ export class DataImporterComponent implements OnInit {
 
     isExternal: boolean = false;
 
-    /*
-     * List of available external systems (filtered based on user's org)
-     */
-    externalSystems: ExternalSystem[];
-
-    /*
-     * currently selected external system.
-     */
-    externalSystemId: string;
-
-    isLoading: boolean = true;
-
     copyBlank: boolean = true;
 
     /*
      * Hierarchies grouped by GeoObjectType
      */
-    sources: Source[];
+    sources: DataSource[];
 
-    source: Source;
+    source: DataSource;
 
     dataSource: string;
 
@@ -148,7 +133,7 @@ export class DataImporterComponent implements OnInit {
         private eventService: EventService,
         private modalService: BsModalService,
         private localizationService: LocalizationService,
-        private sourceService: SourceService,
+        private sourceService: DataSourceService,
         private sysService: ExternalSystemService,
         private hierarchyService: HierarchyService,
         private changeDetectorRef: ChangeDetectorRef
@@ -158,19 +143,6 @@ export class DataImporterComponent implements OnInit {
         this.sourceService.getAll().then(sources =>
             this.sources = sources
         ).catch((err: HttpErrorResponse) => {
-            this.error(err);
-        });
-
-        this.sysService.getExternalSystems(1, 100).then(paginatedSystems => {
-            this.externalSystems = paginatedSystems.resultSet;
-
-            if (this.externalSystems.length === 0) {
-                this.isExternal = false;
-                this.showImportConfig = true; // Show the upload widget if there are no external systems registered
-            }
-
-            this.isLoading = false;
-        }).catch((err: HttpErrorResponse) => {
             this.error(err);
         });
 
@@ -285,20 +257,10 @@ export class DataImporterComponent implements OnInit {
             configuration.isExternal = this.isExternal;
             configuration.hierarchy = this.hierarchyCode;
 
-            let externalSystem: ExternalSystem = null;
-            for (let i = 0; i < this.externalSystems.length; ++i) {
-                let sys: ExternalSystem = this.externalSystems[i];
-
-                if (sys.oid === this.externalSystemId) {
-                    externalSystem = sys;
-                }
-            }
-
-            configuration.externalSystemId = this.externalSystemId;
-            configuration.externalSystem = externalSystem;
 
             this.bsModalRef = this.modalService.show(ImportModalComponent, {
-                animated: false, backdrop: true,
+                animated: false,
+                backdrop: true,
                 ignoreBackdropClick: true
             });
             this.bsModalRef.content.init(configuration);
@@ -367,14 +329,6 @@ export class DataImporterComponent implements OnInit {
         } else {
             this.isExternal = false;
         }
-    }
-
-    onNext(): void {
-        this.showImportConfig = true;
-    }
-
-    onBack(): void {
-        this.showImportConfig = false;
     }
 
     //    setInfinity(endDate: any): void {

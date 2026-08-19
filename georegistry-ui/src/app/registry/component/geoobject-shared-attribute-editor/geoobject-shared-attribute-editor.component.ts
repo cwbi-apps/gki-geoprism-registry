@@ -32,7 +32,7 @@ import { LocalizationService, AuthService, ExternalSystemService } from "@shared
 import { GeometryService, RegistryService } from "@registry/service";
 import { DateService } from "@shared/service/date.service";
 
-import { GeoObjectType, GeoObjectOverTime, AttributeType, Term, HierarchyOverTime } from "@registry/model/registry";
+import { GeoObjectType, GeoObjectOverTime, AttributeType, Term, HierarchyOverTime, TimeRangeEntry } from "@registry/model/registry";
 import { UpdateAttributeOverTimeAction, AbstractAction, CreateGeoObjectAction, ChangeRequest } from "@registry/model/crtable";
 import { ActionTypes } from "@registry/model/constants";
 import { ChangeRequestEditor } from "./change-request-editor";
@@ -48,6 +48,8 @@ import { FormsModule } from "@angular/forms";
 import { LocalizeComponent } from "../../../shared/component/localize/localize.component";
 import { BooleanFieldComponent } from "../../../shared/component/form-fields/boolean-field/boolean-field.component";
 import { StabilityPeriodComponent } from "./stability-period.component";
+import { SourceAuthorityService } from "@registry/service/source-authority.service";
+import { SourceAuthority } from "@registry/model/source";
 
 @Component({
     selector: "geoobject-shared-attribute-editor",
@@ -125,6 +127,8 @@ export class GeoObjectSharedAttributeEditorComponent implements OnInit, OnDestro
 
     @Input() datasetId: string = null;
 
+    @Output() stabilityPeriodsChange = new EventEmitter<TimeRangeEntry[]>();
+
     // TODO : This was copy / pasted into manage-versions.component::onDateChange and ChangeRequestEditor::generateAttributeEditors
     geoObjectAttributeExcludes: string[] = ["uid", "sequence", "type", "lastUpdateDate", "createDate", "invalid", "exists"];
 
@@ -139,11 +143,11 @@ export class GeoObjectSharedAttributeEditorComponent implements OnInit, OnDestro
     showStabilityPeriods = false;
 
     private subscription: Subscription;
-    
-    systems: ExternalSystem[];
+
+    authorities: SourceAuthority[];
 
     // eslint-disable-next-line no-useless-constructor
-    constructor(private externalSystemService: ExternalSystemService, private lService: LocalizationService, private geomService: GeometryService, private authService: AuthService, private dateService: DateService, private registryService: RegistryService, private votService: VotService) {
+    constructor(private authorityService: SourceAuthorityService, private lService: LocalizationService, private geomService: GeometryService, private authService: AuthService, private dateService: DateService, private registryService: RegistryService, private votService: VotService) {
 
     }
 
@@ -215,11 +219,11 @@ export class GeoObjectSharedAttributeEditorComponent implements OnInit, OnDestro
 
         this.showAllInstances = (this.changeRequestEditor.changeRequest.isNew || this.changeRequestEditor.changeRequest.type === "CreateGeoObject");
         this.isMaintainer = this.authService.isSRA() || this.authService.isOrganizationRA(got.organizationCode) || this.authService.isGeoObjectTypeOrSuperRM(got);
-        
-        this.externalSystemService.getAllRead().then((systems: ExternalSystem[]) => {
-          this.systems = systems;
+
+        this.authorityService.getAll().then((authorities: SourceAuthority[]) => {
+            this.authorities = authorities;
         }).catch(reason => {
-          console.log(reason);
+            console.log(reason);
         });
     }
 

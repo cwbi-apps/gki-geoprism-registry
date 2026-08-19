@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 import org.commongeoregistry.adapter.constants.DefaultAttribute;
 import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
@@ -50,6 +51,7 @@ import net.geoprism.registry.etl.upload.ImportConfiguration.ImportStrategy;
 import net.geoprism.registry.etl.upload.ObjectRecordedErrorException;
 import net.geoprism.registry.excel.MapFeatureRow;
 import net.geoprism.registry.graph.ConceptClass;
+import net.geoprism.registry.io.view.ConceptObjectImportConfigurationDTO;
 import net.geoprism.registry.jobs.ImportHistory;
 import net.geoprism.registry.model.ConceptObject;
 import net.geoprism.registry.service.business.ConceptClassBusinessServiceIF;
@@ -60,7 +62,6 @@ import net.geoprism.registry.test.FastTestDataset;
 import net.geoprism.registry.test.TestDataSet;
 import net.geoprism.registry.test.USATestData;
 import net.geoprism.registry.view.ConceptClassDTO;
-import net.geoprism.registry.view.ConceptObjectImportConfigurationDTO;
 import net.geoprism.registry.view.ImportConfigurationView;
 import net.geoprism.registry.view.ImportHistoryView;
 
@@ -187,7 +188,7 @@ public class ConceptObjectImporterTest extends FastDatasetTest implements Instan
         importer.importRow(new MapFeatureRow(row, 0L));
       }
 
-      ConceptObject result = this.objectService.get(type, attributeType.getCode(), basicValue);
+      ConceptObject result = this.objectService.get(type, attributeType.getCode(), basicValue).orElse(null);
 
       try
       {
@@ -261,7 +262,7 @@ public class ConceptObjectImporterTest extends FastDatasetTest implements Instan
         importer.importRow(new MapFeatureRow(row, 0L));
       }
 
-      ConceptObject result = this.objectService.get(type, attributeType.getCode(), value);
+      ConceptObject result = this.objectService.get(type, attributeType.getCode(), value).orElse(null);
 
       try
       {
@@ -311,7 +312,7 @@ public class ConceptObjectImporterTest extends FastDatasetTest implements Instan
 
         Assert.assertFalse(configuration.hasExceptions());
 
-        ConceptObject result = this.objectService.getByCode(type, TEST_CODE);
+        ConceptObject result = this.objectService.getByCode(type, TEST_CODE).orElse(null);
 
         Assert.assertEquals(result.getValue(attributeType.getCode()), value);
       }
@@ -413,8 +414,10 @@ public class ConceptObjectImporterTest extends FastDatasetTest implements Instan
     });
   }
 
-  public void assertAndDelete(ConceptObject o1)
+  public void assertAndDelete(Optional<ConceptObject> optional)
   {
+    ConceptObject o1 = optional.orElse(null);
+
     try
     {
       Assert.assertNotNull(o1);

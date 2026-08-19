@@ -48,10 +48,10 @@ import com.runwaysdk.system.scheduler.JobHistory;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import net.geoprism.registry.io.view.ImportConfigurationDTO;
 import net.geoprism.registry.service.request.ETLService;
 import net.geoprism.registry.spring.NullableDateDeserializer;
 import net.geoprism.registry.view.ErrorResolveDTO;
-import net.geoprism.registry.view.ImportConfigurationDTO;
 import net.geoprism.registry.view.ImportHistoryView;
 import net.geoprism.registry.view.ValidationResolveDTO;
 
@@ -94,10 +94,9 @@ public class ETLController extends RunwaySpringController
 
   public static class ReImportConfigBody
   {
-    @NotNull
-    ImportConfigurationDTO config;
+    String                config;
 
-    private MultipartFile  file;
+    private MultipartFile file;
 
     public MultipartFile getFile()
     {
@@ -109,12 +108,12 @@ public class ETLController extends RunwaySpringController
       this.file = file;
     }
 
-    public ImportConfigurationDTO getConfig()
+    public String getConfig()
     {
       return config;
     }
 
-    public void setConfig(ImportConfigurationDTO config)
+    public void setConfig(String config)
     {
       this.config = config;
     }
@@ -149,7 +148,7 @@ public class ETLController extends RunwaySpringController
   @PostMapping("/reimport")
   public ResponseEntity<ImportConfigurationDTO> doReImport(@Valid @ModelAttribute ReImportConfigBody body)
   {
-    ImportConfigurationDTO config = this.service.reImport(this.getSessionId(), body.file, body.config);
+    ImportConfigurationDTO config = this.service.reImport(this.getSessionId(), body.file, ImportConfigurationDTO.parseJson(body.config));
 
     return ResponseEntity.ok(config);
   }

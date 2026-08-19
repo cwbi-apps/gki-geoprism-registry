@@ -6,8 +6,6 @@ package net.geoprism.registry.etl;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -52,9 +50,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import com.runwaysdk.business.SmartExceptionDTO;
 import com.runwaysdk.constants.VaultProperties;
-import com.runwaysdk.dataaccess.MdRelationshipDAOIF;
 import com.runwaysdk.dataaccess.database.Database;
-import com.runwaysdk.dataaccess.metadata.MdRelationshipDAO;
 import com.runwaysdk.resource.CloseableFile;
 import com.runwaysdk.resource.StreamResource;
 import com.runwaysdk.session.Request;
@@ -68,7 +64,6 @@ import net.geoprism.data.importer.BasicColumnFunction;
 import net.geoprism.data.importer.ShapefileFunction;
 import net.geoprism.registry.InstanceTestClassListener;
 import net.geoprism.registry.JobHistoryTileCache;
-import net.geoprism.registry.RegistryConstants;
 import net.geoprism.registry.SpringInstanceTestClassRunner;
 import net.geoprism.registry.USADatasetTest;
 import net.geoprism.registry.config.TestApplication;
@@ -87,6 +82,10 @@ import net.geoprism.registry.io.Location;
 import net.geoprism.registry.io.LocationBuilder;
 import net.geoprism.registry.io.ParentMatchStrategy;
 import net.geoprism.registry.io.PostalCodeFactory;
+import net.geoprism.registry.io.view.GeoObjectImportConfigurationDTO;
+import net.geoprism.registry.io.view.ImportColumnDTO;
+import net.geoprism.registry.io.view.ImportConfigurationDTO;
+import net.geoprism.registry.io.view.ImportTypeDTO;
 import net.geoprism.registry.jobs.ImportHistory;
 import net.geoprism.registry.jobs.ParentReferenceProblem;
 import net.geoprism.registry.jobs.ValidationProblem;
@@ -108,11 +107,7 @@ import net.geoprism.registry.test.TestGeoObjectInfo;
 import net.geoprism.registry.test.TestGeoObjectTypeInfo;
 import net.geoprism.registry.test.USATestData;
 import net.geoprism.registry.tile.GeometryTableVectorTileBuilder;
-import net.geoprism.registry.view.GeoObjectImportConfigurationDTO;
-import net.geoprism.registry.view.ImportColumnDTO;
-import net.geoprism.registry.view.ImportConfigurationDTO;
 import net.geoprism.registry.view.ImportConfigurationView;
-import net.geoprism.registry.view.ImportTypeDTO;
 import net.geoprism.registry.view.ValidationResolveDTO;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, classes = TestApplication.class)
@@ -170,6 +165,8 @@ public class ShapefileServiceTest extends USADatasetTest implements InstanceTest
   @After
   public void tearDown()
   {
+    PostalCodeFactory.clear();
+
     testData.logOut();
 
     testData.tearDownInstanceData();
@@ -229,8 +226,6 @@ public class ShapefileServiceTest extends USADatasetTest implements InstanceTest
   @Request
   public void testGetAttributeInformation() throws JSONException
   {
-    PostalCodeFactory.remove(USATestData.STATE.getServerObject());
-
     InputStream istream = this.getClass().getResourceAsStream("/cb_2017_us_state_500k.zip.test");
 
     Assert.assertNotNull(istream);
@@ -457,22 +452,6 @@ public class ShapefileServiceTest extends USADatasetTest implements InstanceTest
     Assert.assertNotNull(object.getGeometry());
     Assert.assertEquals("Alabama", object.getLocalizedDisplayLabel());
     Assert.assertEquals(131174431216L, object.getValue(testInteger.getName()));
-  }
-
-  public long getJobHistoryGeometryCount(ImportHistory hist) throws SQLException
-  {
-    MdRelationshipDAOIF mdRelationship = MdRelationshipDAO.getMdRelationshipDAO(RegistryConstants.JOB_HISTORY_GEOMETRY);
-
-    StringBuilder statement = new StringBuilder();
-    statement.append("SELECT COUNT(*) FROM " + mdRelationship.getTableName());
-    statement.append(" WHERE parent_oid = '" + hist.getOid() + "'");
-
-    try (ResultSet results = Database.query(statement.toString()))
-    {
-      results.next();
-
-      return results.getLong(1);
-    }
   }
 
   @Test

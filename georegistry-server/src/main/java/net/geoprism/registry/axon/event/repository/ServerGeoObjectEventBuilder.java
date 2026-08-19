@@ -9,26 +9,16 @@ import org.commongeoregistry.adapter.dataaccess.GeoObjectOverTime;
 import com.google.gson.JsonObject;
 import com.runwaysdk.business.graph.EdgeObject;
 
-import net.geoprism.registry.etl.upload.ClassifierVertexCache;
-import net.geoprism.registry.graph.GeoVertex;
+import net.geoprism.registry.model.EdgeType;
 import net.geoprism.registry.model.ServerGeoObjectIF;
 import net.geoprism.registry.model.ServerHierarchyType;
 import net.geoprism.registry.service.business.GeoObjectBusinessServiceIF;
 
 public class ServerGeoObjectEventBuilder extends AbstractGeoObjectEventBuilder<ServerGeoObjectIF>
 {
-  private ClassifierVertexCache cache;
-
   public ServerGeoObjectEventBuilder(GeoObjectBusinessServiceIF service)
   {
-    this(service, null);
-  }
-
-  public ServerGeoObjectEventBuilder(GeoObjectBusinessServiceIF service, ClassifierVertexCache cache)
-  {
     super(service);
-
-    this.cache = cache;
   }
 
   @Override
@@ -51,7 +41,7 @@ public class ServerGeoObjectEventBuilder extends AbstractGeoObjectEventBuilder<S
 
   protected GeoObjectOverTime toDTO()
   {
-    return this.service.toGeoObjectOverTime(getOrThrow(), false, this.cache);
+    return this.service.toGeoObjectOverTime(getOrThrow(), false, false);
   }
 
   @Override
@@ -62,12 +52,13 @@ public class ServerGeoObjectEventBuilder extends AbstractGeoObjectEventBuilder<S
 
     for (EdgeObject edge : edges)
     {
-      Date startDate = edge.getObjectValue(GeoVertex.START_DATE);
-      Date endDate = edge.getObjectValue(GeoVertex.END_DATE);
+      Date startDate = edge.getObjectValue(EdgeType.START_DATE);
+      Date endDate = edge.getObjectValue(EdgeType.END_DATE);
       String uid = edge.getObjectValue(DefaultAttribute.UID.getName());
 
       this.addEvent(new GeoObjectRemoveParentEvent(getCode(), getType(), uid, hierarchyType.getCode(), startDate, endDate));
     }
   }
+
 
 }

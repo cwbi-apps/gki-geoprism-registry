@@ -29,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang.StringUtils;
 import org.axonframework.eventhandling.GenericEventMessage;
 import org.axonframework.eventhandling.gateway.EventGateway;
-import org.commongeoregistry.adapter.constants.DefaultAttribute;
 import org.commongeoregistry.adapter.dataaccess.GeoObjectOverTime;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -40,8 +39,8 @@ import com.runwaysdk.ProblemException;
 import com.runwaysdk.ProblemIF;
 import com.runwaysdk.dataaccess.DuplicateDataException;
 import com.runwaysdk.dataaccess.ProgrammingErrorException;
-import com.runwaysdk.dataaccess.RelationshipDAO;
 import com.runwaysdk.dataaccess.transaction.Transaction;
+import com.runwaysdk.dataaccess.transaction.TransactionState;
 import com.runwaysdk.session.Request;
 import com.runwaysdk.session.RequestState;
 import com.runwaysdk.session.RequestType;
@@ -52,10 +51,10 @@ import net.geoprism.data.importer.FeatureRow;
 import net.geoprism.data.importer.ShapefileFunction;
 import net.geoprism.registry.DataNotFoundException;
 import net.geoprism.registry.GeoregistryProperties;
-import net.geoprism.registry.RegistryConstants;
 import net.geoprism.registry.axon.event.repository.AbstractRepositoryEvent;
 import net.geoprism.registry.axon.event.repository.BusinessObjectApplyEdgeEvent;
 import net.geoprism.registry.axon.event.repository.GeoObjectApplyEdgeEvent;
+import net.geoprism.registry.axon.projection.RepositoryProjection;
 import net.geoprism.registry.cache.BusinessObjectCache;
 import net.geoprism.registry.cache.Cache;
 import net.geoprism.registry.cache.GeoObjectCache;
@@ -68,7 +67,6 @@ import net.geoprism.registry.jobs.RowValidationProblem;
 import net.geoprism.registry.model.BusinessObject;
 import net.geoprism.registry.model.EdgeType;
 import net.geoprism.registry.model.ServerGeoObjectIF;
-import net.geoprism.registry.service.business.GeoObjectBusinessServiceIF;
 import net.geoprism.registry.service.business.ServiceFactory;
 import net.geoprism.registry.view.TypeClass;
 import net.geoprism.registry.view.TypeInfo;
@@ -80,7 +78,7 @@ public class EdgeObjectImporter implements ObjectImporterIF
   }
 
   public static enum ReferenceStrategy {
-    CODE, FIXED_TYPE
+    CODE, FIXED_TYPE, EXTERNAL_ID
   }
 
   private class Task implements Runnable
@@ -227,6 +225,8 @@ public class EdgeObjectImporter implements ObjectImporterIF
   {
     try
     {
+      this.addCacheToTransaction();
+
       // Refresh the session because it might expire on long imports
       if ( ( this.lastValidateSessionRefresh + EdgeObjectImporter.refreshSessionRecordCount ) < row.getRowNumber() && Session.getCurrentSession() != null)
       {
@@ -259,8 +259,11 @@ public class EdgeObjectImporter implements ObjectImporterIF
 
         EdgeType graphType = this.configuration.getGraphType();
 
-        validateObject(graphType.getSourceType(), sourceCode, sourceTypeCode);
-        validateObject(graphType.getTargetType(), targetCode, targetTypeCode);
+        validateObject(graphType.getSourceType(), this.configuration.getEdgeSourceStrategy(), sourceCode, sourceTypeCode, this.configuration.getEdgeSourceAuthority());
+        validateObject(graphType.getTargetType(), this.configuration.getEdgeTargetStrategy(), targetCode, targetTypeCode, this.configuration.getEdgeTargetAuthority());
+
+        // TODO if the graph type is a hierarchy we need to validate that edge
+        // is valid for based on the hierarchy definition
       }
       catch (IgnoreRowException e)
       {
@@ -290,11 +293,36 @@ public class EdgeObjectImporter implements ObjectImporterIF
     }
   }
 
-  public void validateObject(TypeClass type, String code, String typeCode)
+  public void addCacheToTransaction()
+  {
+    TransactionState state = TransactionState.getCurrentTransactionState();
+    state.putTransactionObject(RepositoryProjection.GEO_CACHE, goCache);
+    state.putTransactionObject(RepositoryProjection.BUSINESS_CACHE, boCache);
+    state.putTransactionObject(RepositoryProjection.RID_CACHE, goRidCache);
+  }
+
+  public void validateObject(TypeClass type, ReferenceStrategy strategy, String code, String typeCode, String authority)
   {
     if (type.equals(TypeClass.GEO_OBJECT_TYPE))
     {
-      goCache.getOrFetchByCode(code, typeCode);
+      if (strategy.equals(ReferenceStrategy.EXTERNAL_ID))
+      {
+        ServerGeoObjectIF object = goCache.getOrFetchByExternalId(code, typeCode, authority);
+
+        if (object == null)
+        {
+          DataNotFoundException ex = new DataNotFoundException();
+          ex.setAttributeLabel("External Id");
+          ex.setDataIdentifier(code);
+          ex.setTypeLabel(typeCode);
+          throw ex;
+        }
+
+      }
+      else
+      {
+        goCache.getOrFetchByCode(code, typeCode);
+      }
     }
     else if (type.equals(TypeClass.BUSINESS_TYPE))
     {
@@ -402,6 +430,8 @@ public class EdgeObjectImporter implements ObjectImporterIF
   @Transaction
   public boolean importRowInTrans(FeatureRow row, RowData data)
   {
+    this.addCacheToTransaction();
+
     boolean imported = false;
 
     // Refresh the session because it might expire on long imports
@@ -419,6 +449,7 @@ public class EdgeObjectImporter implements ObjectImporterIF
       String sourceTypeCode = getValue("edgeSourceType", row);
       String targetCode = getValue("edgeTarget", row);
       String targetTypeCode = getValue("edgeTargetType", row);
+
       String dataSource = configuration.getDataSource() == null ? null : this.configuration.getDataSource().getCode();
       Date startDate = this.configuration.getStartDate();
       Date endDate = this.configuration.getEndDate();
@@ -427,9 +458,19 @@ public class EdgeObjectImporter implements ObjectImporterIF
       String edgeTypeCode = EdgeType.getTypeCode(graphType);
       String edgeCode = this.configuration.getGraphType().getCode();
 
+      if (this.configuration.getEdgeSourceStrategy().equals(ReferenceStrategy.EXTERNAL_ID))
+      {
+        sourceCode = getCodeForExternalId(sourceCode, sourceTypeCode, this.configuration.getEdgeSourceAuthority());
+      }
+
+      if (this.configuration.getEdgeTargetStrategy().equals(ReferenceStrategy.EXTERNAL_ID))
+      {
+        targetCode = getCodeForExternalId(targetCode, targetTypeCode, this.configuration.getEdgeTargetAuthority());
+      }
+
       AbstractRepositoryEvent event = graphType instanceof BusinessEdgeType ? //
-          new BusinessObjectApplyEdgeEvent(sourceCode, sourceTypeCode, edgeCode, targetCode, targetTypeCode, startDate, endDate, dataSource, this.configuration.getImportStrategy(), false) : //
-          new GeoObjectApplyEdgeEvent(sourceCode, sourceTypeCode, edgeTypeCode, edgeCode, targetCode, targetTypeCode, startDate, endDate, dataSource, this.configuration.getImportStrategy(), false);
+          new BusinessObjectApplyEdgeEvent(sourceCode, sourceTypeCode, edgeCode, targetCode, targetTypeCode, startDate, endDate, dataSource, this.configuration.getImportStrategy(), true, this.configuration.getHistoryId()) : //
+          new GeoObjectApplyEdgeEvent(sourceCode, sourceTypeCode, edgeTypeCode, edgeCode, targetCode, targetTypeCode, startDate, endDate, dataSource, this.configuration.getImportStrategy(), true, this.configuration.getHistoryId());
 
       this.gateway.publish(GenericEventMessage.asEventMessage(event));
 
@@ -447,16 +488,6 @@ public class EdgeObjectImporter implements ObjectImporterIF
       }
       else
       {
-        if (graphType.getSourceType().equals(TypeClass.GEO_OBJECT_TYPE))
-        {
-          createImportHistoryRelationship(sourceTypeCode, sourceCode);
-        }
-
-        if (graphType.getTargetType().equals(TypeClass.GEO_OBJECT_TYPE))
-        {
-          createImportHistoryRelationship(targetTypeCode, targetCode);
-        }
-
         this.progressListener.add(new TypeInfo(graphType.getSourceType(), sourceTypeCode));
         this.progressListener.add(new TypeInfo(graphType.getTargetType(), targetTypeCode));
       }
@@ -475,19 +506,9 @@ public class EdgeObjectImporter implements ObjectImporterIF
     return imported;
   }
 
-  public void createImportHistoryRelationship(String typeCode, String code)
+  public String getCodeForExternalId(String externalId, String typeCode, String authority)
   {
-    ServerGeoObjectIF object = ServiceFactory.getBean(GeoObjectBusinessServiceIF.class).getGeoObjectByCode(code, typeCode);
-
-    if (object != null)
-    {
-      String geometryId = object.getValue(DefaultAttribute.GEOMETRY.getName(), configuration.getStartDate());
-
-      if (!StringUtils.isBlank(geometryId) && !StringUtils.isBlank(this.configuration.getHistoryId()))
-      {
-        RelationshipDAO.newInstance(this.configuration.getHistoryId(), geometryId, RegistryConstants.JOB_HISTORY_GEOMETRY).apply();
-      }
-    }
+    return goCache.getOrFetchByExternalId(externalId, typeCode, authority).getCode();
   }
 
   protected String getValue(String attribute, FeatureRow row)
@@ -499,7 +520,7 @@ public class EdgeObjectImporter implements ObjectImporterIF
     {
       target = this.getConfigValue(attribute);
     }
-    else if (strategy.equals(ReferenceStrategy.CODE))
+    else if (strategy.equals(ReferenceStrategy.CODE) || strategy.equals(ReferenceStrategy.EXTERNAL_ID))
     {
       target = this.getConfigValue(attribute);
     }

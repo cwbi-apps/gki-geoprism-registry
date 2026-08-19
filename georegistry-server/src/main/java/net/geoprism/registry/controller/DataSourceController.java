@@ -20,84 +20,32 @@ package net.geoprism.registry.controller;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
 import net.geoprism.registry.RegistryConstants;
 import net.geoprism.registry.model.DataSourceDTO;
-import net.geoprism.registry.service.request.SourceServiceIF;
+import net.geoprism.registry.service.request.DataSourceServiceIF;
 
 @RestController
 @Validated
-public class DataSourceController extends RunwaySpringController
+@RequestMapping(RegistryConstants.CONTROLLER_ROOT + "data-source")
+public class DataSourceController extends AbstractCrudController<DataSourceDTO, DataSourceServiceIF>
 {
-  public static class CodeBody
+  public DataSourceController(DataSourceServiceIF service)
   {
-    @NotEmpty
-    private String code;
-
-    public String getCode()
-    {
-      return code;
-    }
-
-    public void setCode(String code)
-    {
-      this.code = code;
-    }
-
+    super(service);
   }
 
-  public static final String API_PATH = RegistryConstants.CONTROLLER_ROOT + "source";
-
-  @Autowired
-  private SourceServiceIF    service;
-
-  @GetMapping(API_PATH + "/get-all")
-  public ResponseEntity<List<DataSourceDTO>> getAll()
-  {
-    List<DataSourceDTO> sources = this.service.getAll(this.getSessionId());
-
-    return new ResponseEntity<List<DataSourceDTO>>(sources, HttpStatus.OK);
-  }
-
-  @PostMapping(API_PATH + "/apply")
-  public ResponseEntity<DataSourceDTO> apply(@Valid @RequestBody DataSourceDTO source)
-  {
-    DataSourceDTO response = this.service.apply(this.getSessionId(), source);
-
-    return new ResponseEntity<DataSourceDTO>(response, HttpStatus.OK);
-  }
-
-  @PostMapping(API_PATH + "/remove")
-  public ResponseEntity<Void> remove(@Valid @RequestBody CodeBody body)
-  {
-    this.service.delete(this.getSessionId(), body.getCode());
-
-    return new ResponseEntity<Void>(HttpStatus.NO_CONTENT);
-  }
-
-  @GetMapping(API_PATH + "/get")
-  public ResponseEntity<DataSourceDTO> get(@NotEmpty @RequestParam(name = "code") String code)
-  {
-    DataSourceDTO source = this.service.getByCode(this.getSessionId(), code);
-
-    return new ResponseEntity<DataSourceDTO>(source, HttpStatus.OK);
-  }
-
-  @GetMapping(API_PATH + "/search")
+  @GetMapping("/search")
   public ResponseEntity<List<DataSourceDTO>> search(@RequestParam(name = "text", required = false) String text)
   {
-    List<DataSourceDTO> sources = this.service.search(this.getSessionId(), text);
+    List<DataSourceDTO> sources = this.getService().search(this.getSessionId(), text);
 
     return new ResponseEntity<List<DataSourceDTO>>(sources, HttpStatus.OK);
   }

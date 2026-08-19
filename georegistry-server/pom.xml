@@ -37,7 +37,7 @@
 
   <properties>
     <hapifhir_version>8.8.1</hapifhir_version>
-    <axon.version>4.11.2</axon.version>
+    <axon.version>4.11.3</axon.version>
   </properties>
 
   <dependencyManagement>
@@ -131,17 +131,6 @@
       <groupId>com.wdtinc</groupId>
       <artifactId>mapbox-vector-tile</artifactId>
       <version>3.1.2-TF</version>
-      <exclusions>
-      	<exclusion>
-      		<groupId>org.slf4j</groupId>
-      		<artifactId>slf4j-api</artifactId>
-      	</exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>net.geoprism</groupId>
-      <artifactId>dhis2adapter</artifactId>
-      <version>${project.version}</version>
       <exclusions>
       	<exclusion>
       		<groupId>org.slf4j</groupId>

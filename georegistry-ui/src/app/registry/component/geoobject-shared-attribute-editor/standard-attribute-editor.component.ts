@@ -34,16 +34,13 @@ import {
 } from "@angular/animations";
 import { HttpErrorResponse } from "@angular/common/http";
 import { GeoObjectType, AttributeType, GeoObjectOverTime } from "@registry/model/registry";
-import { ChangeRequest, SummaryKey } from "@registry/model/crtable";
+import { ChangeRequest } from "@registry/model/crtable";
 import { GovernanceStatus } from "@registry/model/constants";
-import { AuthService } from "@shared/service/auth.service";
 
 import { ErrorHandler } from "@shared/component";
 import { BsModalService, BsModalRef } from "ngx-bootstrap/modal";
 
-import { RegistryService } from "@registry/service";
 import { ChangeRequestService } from "@registry/service/change-request.service";
-import { DateService } from "@shared/service/date.service";
 
 import { LocalizationService } from "@shared/service/localization.service";
 
@@ -51,11 +48,11 @@ import { ControlContainer, NgForm, FormsModule } from "@angular/forms";
 import { StandardAttributeCRModel, StandardDiffView, ListDiffView } from "./StandardAttributeCRModel";
 import { ChangeRequestEditor } from "./change-request-editor";
 import { ExternalId } from "@core/model/core";
-import { ExternalSystemService } from "@shared/service";
-import { ExternalSystem } from "@shared/model/core";
-import { LocalizePipe } from "../../../shared/pipe/localize.pipe";
-import { LocalizeComponent } from "../../../shared/component/localize/localize.component";
+import { LocalizePipe } from "@shared/pipe/localize.pipe";
+import { LocalizeComponent } from "@shared/component/localize/localize.component";
 import { NgIf, NgFor, NgClass } from "@angular/common";
+import { SourceAuthority } from "@registry/model/source";
+import { UniqueAuthorityValidatorDirective } from "./unique-authority-validator.directive";
 
 @Component({
     selector: "standard-attribute-editor",
@@ -79,7 +76,7 @@ import { NgIf, NgFor, NgClass } from "@angular/common";
     ],
     viewProviders: [{ provide: ControlContainer, useExisting: NgForm }],
     standalone: true,
-    imports: [NgIf, LocalizeComponent, NgFor, NgClass, FormsModule, LocalizePipe]
+    imports: [NgIf, LocalizeComponent, NgFor, NgClass, FormsModule, LocalizePipe, UniqueAuthorityValidatorDirective]
 })
 export class StandardAttributeEditorComponent implements OnInit {
 
@@ -88,8 +85,8 @@ export class StandardAttributeEditorComponent implements OnInit {
     @Input() isNew: boolean = false;
 
     message: string = null;
-    
-    @Input() systems: ExternalSystem[];
+
+    @Input() authorities: SourceAuthority[] = [];
 
     isValid: boolean = true;
     @Output() isValidChange = new EventEmitter<boolean>();
@@ -113,10 +110,10 @@ export class StandardAttributeEditorComponent implements OnInit {
     changeRequestAttributeEditor: StandardAttributeCRModel;
 
     // eslint-disable-next-line no-useless-constructor
-    constructor(public cdr: ChangeDetectorRef, public service: RegistryService, public lService: LocalizationService,
-        public changeDetectorRef: ChangeDetectorRef, public dateService: DateService, private authService: AuthService,
-        private requestService: ChangeRequestService, private modalService: BsModalService, private elementRef: ElementRef,
-        private externalSystemService: ExternalSystemService) { }
+    constructor(
+        private lService: LocalizationService,
+        private requestService: ChangeRequestService,
+        private modalService: BsModalService) { }
 
     ngOnInit(): void {
         this.changeRequestAttributeEditor = this.changeRequestEditor.getEditorForAttribute(this.attributeType, null) as StandardAttributeCRModel;
@@ -127,57 +124,50 @@ export class StandardAttributeEditorComponent implements OnInit {
     }
 
     calculateView(): void {
-       if (this.attributeType.type === 'list' && this.attributeType.code === 'altIds') {
+        if (this.attributeType.type === 'list' && this.attributeType.code === 'altIds') {
             this.view = new ListDiffView(this.lService, this.changeRequestAttributeEditor);
         } else {
             this.view = new StandardDiffView(this.changeRequestAttributeEditor, this.lService);
         }
     }
-    
-    getExternalSystemLabel(externalSystemId: string): string {
-        let matches = this.systems.filter(system => externalSystemId === system.oid);
-        
+
+    getExternalSystemLabel(code: string): string {
+        let matches = this.authorities.filter(authority => code === authority.code);
+
         if (matches.length > 0) {
             return matches[0].label.localizedValue;
         } else {
-            return externalSystemId;
+            return code;
         }
     }
-    
-    getAvailableSystems(externalSystemId: string): ExternalSystem[] {
-        let usedSystems: string[] = this.view.value.map((id: ExternalId) => id.externalSystemId);
-        return this.systems.filter(system => (externalSystemId && externalSystemId === system.oid) || usedSystems.indexOf(system.oid) === -1);
-    }
-    
+
     removeAltId(externalId: ExternalId): void {
-      let i = this.view.value.findIndex((id: ExternalId) => id.id === externalId.id && id.externalSystemId === externalId.externalSystemId);
-      
-      if (i !== -1) {
-        this.view.value.splice(i,1);
-      }
+        let i = this.view.value.findIndex((id: ExternalId) => id.id === externalId.id && id.authority === externalId.authority);
+
+        if (i !== -1) {
+            this.view.value.splice(i, 1);
+        }
     }
-    
+
     onAddNewId(): void {
-        let es = this.getAvailableSystems(null)[0];
-        
         (this.view as ListDiffView).add({
             id: "",
-            externalSystemId: es.oid,
-            externalSystemLabel: es.label.localizedValue,
+            authority: "",
+            authorityLabel: "",
             type: "EXTERNAL_ID"
         });
     }
-    
-    getExternalId(alternateIds: ExternalId[], externalSystemId: string): ExternalId {
-        let ids = alternateIds.filter(id => id.externalSystemId === externalSystemId);
-        
+
+    getExternalId(alternateIds: ExternalId[], authority: string): ExternalId {
+        let ids = alternateIds.filter(id => id.authority === authority);
+
         if (ids.length >= 0) {
-          return ids[0];
+            return ids[0];
         } else {
-          return null;
+            return null;
         }
     }
-    
+
     hasAlternateIdChanged(viewModel: StandardDiffView, externalSystemId: string): boolean {
         return viewModel.oldValue != null && this.getExternalId(viewModel.oldValue, externalSystemId).id !== this.getExternalId(viewModel.value, externalSystemId).id;
     }

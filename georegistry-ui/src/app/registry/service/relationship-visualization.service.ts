@@ -34,9 +34,10 @@ export class RelationshipVisualizationService {
     constructor(private http: HttpClient, private eventService: EventService, private route: ActivatedRoute) {
     }
 
-    tree(relationshipType: string, graphTypeCode: string, sourceVertex: ObjectReference, date: string, boundsWKT: string): Promise<TreeData> {
+    tree(relationshipType: string, graphTypeCode: string, sourceVertex: ObjectReference, date: string, boundsWKT: string, nullDateIsLatest: boolean = true): Promise<TreeData> {
         let params: HttpParams = new HttpParams();
         params = params.set("sourceVertex", JSON.stringify(sourceVertex));
+        params = params.set("nullDateIsLatest", nullDateIsLatest);
 
         if (relationshipType != null) {
             params = params.set("relationshipType", relationshipType);
@@ -100,6 +101,29 @@ export class RelationshipVisualizationService {
 
         return this.http
             .get<any>(environment.apiUrl + "/api/relationship-visualization/relationships", { params: params })
+            .pipe(finalize(() => {
+                // this.eventService.complete();
+            }))
+            .toPromise();
+    }
+
+    relationshipCounts(
+        objectType: "BUSINESS" | "GEOOBJECT",
+        typeCode: string,
+        sourceVertex: ObjectReference
+    ): Promise<{relationships: Relationship[], stabilityPeriods: any}> {
+        let params: HttpParams = new HttpParams();
+
+        params = params.set("objectType", objectType);
+        params = params.set("typeCode", typeCode);
+        params = params.set("sourceVertex", JSON.stringify(sourceVertex));
+
+        return this.http
+            .get<any>(
+                environment.apiUrl
+                    + "/api/relationship-visualization/relationship-counts",
+                { params: params }
+            )
             .pipe(finalize(() => {
                 // this.eventService.complete();
             }))

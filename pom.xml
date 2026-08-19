@@ -15,7 +15,6 @@
   <description>Geoprism's Geo-ontological hierarchy registry</description>
 
   <modules>
-    <module>dhis2adapter</module>
     <module>georegistry-server</module>
     <module>georegistry-ui</module>    
     <module>georegistry-web</module>
@@ -25,8 +24,8 @@
   </modules>
 
   <properties>
-    <spring.boot.version>3.5.13</spring.boot.version>
-    <geoprism.version>2.1.0</geoprism.version>
+    <spring.boot.version>3.5.16</spring.boot.version>
+    <geoprism.version>2.1.1-SNAPSHOT</geoprism.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>

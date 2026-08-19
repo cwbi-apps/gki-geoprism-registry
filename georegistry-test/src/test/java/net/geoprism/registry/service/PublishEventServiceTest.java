@@ -51,6 +51,7 @@ import net.geoprism.registry.graph.UndirectedGraphType;
 import net.geoprism.registry.model.ServerGeoObjectIF;
 import net.geoprism.registry.model.ServerGeoObjectType;
 import net.geoprism.registry.model.ServerHierarchyType;
+import net.geoprism.registry.model.SourceAuthorityDTO;
 import net.geoprism.registry.service.business.BusinessEdgeTypeBusinessServiceIF;
 import net.geoprism.registry.service.business.BusinessEdgeTypeSnapshotBusinessServiceIF;
 import net.geoprism.registry.service.business.BusinessTypeBusinessServiceIF;
@@ -64,6 +65,7 @@ import net.geoprism.registry.service.business.GraphTypeSnapshotBusinessServiceIF
 import net.geoprism.registry.service.business.HierarchyTypeSnapshotBusinessServiceIF;
 import net.geoprism.registry.service.business.PublishBusinessServiceIF;
 import net.geoprism.registry.service.business.PublishEventService;
+import net.geoprism.registry.service.business.SourceAuthorityBusinessServiceIF;
 import net.geoprism.registry.test.USATestData;
 import net.geoprism.registry.view.BusinessTypeDTO;
 import net.geoprism.registry.view.ConceptClassDTO;
@@ -115,6 +117,9 @@ public class PublishEventServiceTest extends EventDatasetTest implements Instanc
   private DataSourceBusinessServiceIF               sourceService;
 
   @Autowired
+  private SourceAuthorityBusinessServiceIF          authorityService;
+
+  @Autowired
   private RegistryEventStore                        store;
 
   private static boolean                            WRITE_FILES = false;
@@ -129,7 +134,7 @@ public class PublishEventServiceTest extends EventDatasetTest implements Instanc
     System.out.println("");
     System.out.println("");
 
-    Assert.assertEquals(Long.valueOf(48L), this.store.size());
+    Assert.assertEquals(Long.valueOf(49L), this.store.size());
 
     String directory = "src/test/resources/commit";
 
@@ -265,22 +270,40 @@ public class PublishEventServiceTest extends EventDatasetTest implements Instanc
         Assert.assertEquals(1, sources.size());
         Assert.assertEquals(USATestData.SOURCE.getCode(), sources.get(0).getCode());
 
-        Assert.assertEquals(Long.valueOf(96L), this.store.size());
+        List<SourceAuthorityDTO> authorities = sources.stream().map(source -> {
+          return this.authorityService.get(source.getObjectValue(DataSource.AUTHORITY));
+        }) //
+            .filter(o -> o.isPresent()) //
+            .map(o -> o.get()) //
+            .distinct() //
+            .map(this.authorityService::toDTO) //
+            .map(o -> {
+              o.setOid(null);
+
+              return o;
+            }) //
+            .toList();
+
+        Assert.assertEquals(1, authorities.size());
+        Assert.assertEquals(USATestData.AUTHORITY.getCode(), authorities.get(0).getCode());
+
+        Assert.assertEquals(Long.valueOf(98L), this.store.size());
 
         List<RemoteEvent> events = this.cService.getRemoteEvents(commit).toList();
 
-        if (events.size() != 48)
+        if (events.size() != 49)
         {
           System.out.println("BAD");
         }
 
-        Assert.assertEquals(48, events.size());
+        Assert.assertEquals(49, events.size());
 
         if (WRITE_FILES)
         {
           mapper.writeValue(new File(directory, "publish.json"), dto);
           mapper.writeValue(new File(directory, "commit.json"), commit.toDTO(publish));
           mapper.writeValue(new File(directory, "sources.json"), sources.stream().map(this.sourceService::toDTO).toArray());
+          mapper.writeValue(new File(directory, "authorities.json"), authorities);
 
           try (FileWriter writer = new FileWriter(new File(directory, "geo-object-types.json")))
           {
@@ -343,7 +366,7 @@ public class PublishEventServiceTest extends EventDatasetTest implements Instanc
 
     try
     {
-      Assert.assertEquals(Long.valueOf(48L), this.store.size());
+      Assert.assertEquals(Long.valueOf(49L), this.store.size());
 
       PublishDTO dto = new PublishDTO("USA Geospatial Graph", USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_END_TIME_DATE);
       dto.addHierarchyType(testData.getManagedHierarchyTypes().stream().map(t -> t.getCode()).toArray(s -> new String[s]));
@@ -394,7 +417,7 @@ public class PublishEventServiceTest extends EventDatasetTest implements Instanc
 
         List<RemoteEvent> events = this.cService.getRemoteEvents(commit).toList();
 
-        Assert.assertEquals(41, events.size());
+        Assert.assertEquals(42, events.size());
       }
       finally
       {
@@ -426,8 +449,8 @@ public class PublishEventServiceTest extends EventDatasetTest implements Instanc
 
         Commit commit = commits.get(0);
 
-        Assert.assertEquals(48, this.cService.getRemoteEvents(commit).toList().size());
-        Assert.assertEquals(Long.valueOf(96), this.store.size());
+        Assert.assertEquals(49, this.cService.getRemoteEvents(commit).toList().size());
+        Assert.assertEquals(Long.valueOf(98), this.store.size());
 
         // Update a geo object
         ServerGeoObjectIF object = USATestData.COLORADO.getServerObject();
@@ -439,7 +462,7 @@ public class PublishEventServiceTest extends EventDatasetTest implements Instanc
 
         gateway.publish(builder.build().stream().map(GenericEventMessage::asEventMessage).toList());
 
-        Assert.assertEquals(Long.valueOf(97), this.store.size());
+        Assert.assertEquals(Long.valueOf(99), this.store.size());
 
         // Create a new commit with the new change
         Commit commit2 = this.service.createNewCommit(publish);

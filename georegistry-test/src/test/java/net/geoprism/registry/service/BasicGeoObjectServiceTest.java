@@ -6,7 +6,6 @@ package net.geoprism.registry.service;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.commongeoregistry.adapter.Term;
 import org.commongeoregistry.adapter.constants.DefaultAttribute;
 import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
 import org.commongeoregistry.adapter.metadata.AttributeClassificationType;
@@ -28,6 +27,7 @@ import net.geoprism.registry.SpringInstanceTestClassRunner;
 import net.geoprism.registry.classification.ClassificationTypeTest;
 import net.geoprism.registry.config.TestApplication;
 import net.geoprism.registry.graph.DataSource;
+import net.geoprism.registry.graph.SourceAuthority;
 import net.geoprism.registry.model.Classification;
 import net.geoprism.registry.model.ClassificationType;
 import net.geoprism.registry.model.EdgeType;
@@ -39,7 +39,7 @@ import net.geoprism.registry.service.business.ClassificationTypeBusinessServiceI
 import net.geoprism.registry.service.business.DataSourceBusinessServiceIF;
 import net.geoprism.registry.service.business.GeoObjectBusinessServiceIF;
 import net.geoprism.registry.service.business.GeoObjectTypeBusinessServiceIF;
-import net.geoprism.registry.service.business.TermBusinessServiceIF;
+import net.geoprism.registry.service.business.SourceAuthorityBusinessServiceIF;
 import net.geoprism.registry.test.USATestData;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, classes = TestApplication.class)
@@ -57,7 +57,7 @@ public class BasicGeoObjectServiceTest implements InstanceTestClassListener
 
   private static Classification               root;
 
-  private static Term                         term;
+  private static SourceAuthority              authority;
 
   private static DataSource                   source;
 
@@ -71,13 +71,13 @@ public class BasicGeoObjectServiceTest implements InstanceTestClassListener
   private GeoObjectTypeBusinessServiceIF      typeService;
 
   @Autowired
-  private TermBusinessServiceIF               termService;
-
-  @Autowired
   private GeoObjectBusinessServiceIF          service;
 
   @Autowired
   private DataSourceBusinessServiceIF         sourceService;
+
+  @Autowired
+  private SourceAuthorityBusinessServiceIF    authorityService;
 
   @Override
   @Request
@@ -102,8 +102,9 @@ public class BasicGeoObjectServiceTest implements InstanceTestClassListener
 
     attributeClassification = this.typeService.createAttributeType(type, attributeClassification);
 
+    authority = this.authorityService.apply(SourceAuthorityServiceTest.createMock());
 
-    source = this.sourceService.apply(SourceServiceTest.createMock());
+    source = this.sourceService.apply(DataSourceServiceTest.createMock(authority));
   }
 
   @Override
@@ -130,6 +131,11 @@ public class BasicGeoObjectServiceTest implements InstanceTestClassListener
     if (source != null)
     {
       this.sourceService.delete(source);
+    }
+
+    if (authority != null)
+    {
+      this.authorityService.delete(authority);
     }
   }
 
@@ -165,7 +171,6 @@ public class BasicGeoObjectServiceTest implements InstanceTestClassListener
       Assert.assertEquals(testDouble, test.getValue(attributeFloat.getCode(), USATestData.DEFAULT_OVER_TIME_DATE), 0.000001);
       Assert.assertEquals(root.getOid(), test.getValue(attributeClassification.getCode(), USATestData.DEFAULT_OVER_TIME_DATE));
       Assert.assertEquals(source.getOid(), test.getValue(DefaultAttribute.DATA_SOURCE.getName(), USATestData.DEFAULT_OVER_TIME_DATE));
-
 
       Geometry geometry = test.getGeometry(USATestData.DEFAULT_OVER_TIME_DATE);
 
@@ -207,7 +212,9 @@ public class BasicGeoObjectServiceTest implements InstanceTestClassListener
     finally
     {
       // Delete the object
-      this.service.getGeoObjectByCode(USATestData.USA.getCode(), type).delete();
+      ServerGeoObjectIF sgo = this.service.getGeoObjectByCode(USATestData.USA.getCode(), type);
+
+      this.service.delete(sgo);
 
       // Make sure the entry was deleted
 
@@ -266,7 +273,9 @@ public class BasicGeoObjectServiceTest implements InstanceTestClassListener
     finally
     {
       // Delete the object
-      this.service.getGeoObjectByCode(USATestData.USA.getCode(), type).delete();
+      ServerGeoObjectIF sgo = this.service.getGeoObjectByCode(USATestData.USA.getCode(), type);
+
+      this.service.delete(sgo);
     }
   }
 }
