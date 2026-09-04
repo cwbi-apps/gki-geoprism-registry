@@ -39,7 +39,8 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
     --rootUser="${DATABASE_USERNAME}" \
     --rootPass="${DATABASE_PASSWORD}" \
     --templateDb=postgres \
-    --clean=true
+    --clean=true \
+    --install=true
 
   echo "Database rebuild complete."
   echo "This is a rebuild-only image. Deploy a normal image to start GeoPrism."
