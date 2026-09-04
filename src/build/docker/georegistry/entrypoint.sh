@@ -36,8 +36,8 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
     -cp "${CATALINA_HOME}/webapps/ROOT/WEB-INF/classes:${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/*" \
     net.geoprism.build.GeoprismDatabaseBuilder \
     "${CATALINA_HOME}/webapps/ROOT/WEB-INF/classes/metadata" \
-    --rootUser="${DATABASE_USERNAME}" \
-    --rootPass="${DATABASE_PASSWORD}" \
+    --rootUser="${POSTGRES_ROOT_USERNAME}" \
+    --rootPass="${POSTGRES_ROOT_PASSWORD}" \
     --templateDb=postgres \
     --clean=true \
     --install=true
