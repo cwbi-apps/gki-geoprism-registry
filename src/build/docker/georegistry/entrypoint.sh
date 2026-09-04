@@ -29,6 +29,21 @@ CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.port=${POSTGRES_PORT}"
 CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.user=${DATABASE_USERNAME}"
 CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.password=${DATABASE_PASSWORD}"
 
+if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
+  echo "Rebuilding GeoPrism database..."
+
+  java ${CATALINA_OPTS} \
+    -cp "${CATALINA_HOME}/webapps/ROOT/WEB-INF/classes:${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/*" \
+    net.geoprism.build.GeoprismDatabaseBuilder \
+    "${CATALINA_HOME}/webapps/ROOT/WEB-INF/classes/metadata" \
+    --rootUser="${DATABASE_USERNAME}" \
+    --rootPass="${DATABASE_PASSWORD}" \
+    --templateDb=postgres \
+    --clean=true
+
+  echo "Database rebuild complete."
+fi
+
 export CATALINA_OPTS
 
 echo "Starting GeoPrism..."
