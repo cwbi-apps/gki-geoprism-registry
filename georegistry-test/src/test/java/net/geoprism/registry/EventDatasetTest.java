@@ -22,15 +22,14 @@ import net.geoprism.registry.axon.projection.RepositoryProjection;
 import net.geoprism.registry.etl.upload.ImportConfiguration.ImportStrategy;
 import net.geoprism.registry.graph.BusinessEdgeType;
 import net.geoprism.registry.graph.BusinessType;
-import net.geoprism.registry.graph.ConceptClass;
+import net.geoprism.registry.graph.ConceptEdgeType;
 import net.geoprism.registry.graph.DirectedAcyclicGraphType;
-import net.geoprism.registry.graph.SourceAuthority;
 import net.geoprism.registry.graph.UndirectedGraphType;
 import net.geoprism.registry.model.BusinessObject;
 import net.geoprism.registry.model.ConceptObject;
 import net.geoprism.registry.model.EdgeDirection;
-import net.geoprism.registry.model.ServerGeoObjectIF;
 import net.geoprism.registry.model.graph.VertexComponent;
+import net.geoprism.registry.service.business.ConceptEdgeTypeBusinessServiceIF;
 import net.geoprism.registry.service.business.DirectedAcyclicGraphTypeBusinessServiceIF;
 import net.geoprism.registry.service.business.GraphRepoServiceIF;
 import net.geoprism.registry.service.business.UndirectedGraphTypeBusinessServiceIF;
@@ -38,15 +37,16 @@ import net.geoprism.registry.test.TestDataSet;
 import net.geoprism.registry.test.TestGeoObjectInfo;
 import net.geoprism.registry.test.USATestData;
 import net.geoprism.registry.view.BusinessEdgeTypeDTO;
-import net.geoprism.registry.view.BusinessEdgeTypeDTO;
 import net.geoprism.registry.view.BusinessTypeDTO;
-import net.geoprism.registry.view.ConceptClassDTO;
 import net.geoprism.registry.view.PublishDTO;
 
 public abstract class EventDatasetTest extends USADatasetTest implements InstanceTestClassListener
 {
   @Autowired
   protected RegistryEventStore                        store;
+
+  @Autowired
+  protected ConceptEdgeTypeBusinessServiceIF          cEdgeService;
 
   @Autowired
   protected DirectedAcyclicGraphTypeBusinessServiceIF dagService;
@@ -59,8 +59,6 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
 
   @Autowired
   protected RepositoryProjection                      projection;
-
-  protected static ConceptClass                       cClass;
 
   protected static BusinessType                       btype;
 
@@ -76,7 +74,9 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
 
   protected static BusinessObject                     cObject;
 
-  protected static ConceptObject                      concept;
+  protected static ConceptObject                      pConcept;
+
+  protected static ConceptObject                      cConcept;
 
   @Override
   public void beforeClassSetup() throws Exception
@@ -94,15 +94,6 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
   @Request
   private void setUpInReq()
   {
-    ConceptClassDTO concept = new ConceptClassDTO();
-    concept.setCode("TEST_CONCEPT");
-    concept.setOrganization(USATestData.ORG_PPP.getCode());
-    concept.setDisplayLabel(new LocalizedValue("Test Concept"));
-
-    cClass = this.cClassService.apply(concept);
-
-    this.cClassService.createAttributeType(cClass, new AttributeBooleanType("testBoolean", new LocalizedValue("Test Boolean"), new LocalizedValue("Test Boolean"), false, false, false, false));
-
     BusinessTypeDTO object = new BusinessTypeDTO();
     object.setCode("TEST_BUSINESS");
     object.setOrganization(USATestData.ORG_PPP.getCode());
@@ -119,6 +110,8 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
     dagType = this.dagService.create("TEST_DAG", new LocalizedValue("TEST_DAG"), new LocalizedValue("TEST_DAG"), 0L);
 
     undirectedType = this.undirectedService.create("TEST_UN", new LocalizedValue("TEST_UN"), new LocalizedValue("TEST_UN"), 0L);
+    
+    this.cClassService.createAttributeType(cClass, new AttributeBooleanType("testBoolean", new LocalizedValue("Test Boolean"), new LocalizedValue("Test Boolean"), false, false, false, false));
 
     this.repoService.refreshMetadataCache();
   }
@@ -152,11 +145,6 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
       this.undirectedService.delete(undirectedType);
     }
 
-    if (cClass != null)
-    {
-      this.cClassService.delete(cClass);
-    }
-
     super.afterClassSetup();
   }
 
@@ -170,11 +158,13 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
 
     testData.logIn(USATestData.USER_NPS_RA);
 
-    concept = createConceptObject("CONCEPT", USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_END_TIME_DATE);
+    pConcept = createConceptObject("P_CONCEPT", USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_END_TIME_DATE);
+    cConcept = createConceptObject("C_CONCEPT", USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_END_TIME_DATE);
 
     pObject = createBusinessObject("P_CODE", USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_END_TIME_DATE);
     cObject = createBusinessObject("C_CODE", USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_END_TIME_DATE);
 
+    addConceptEdge();
     addBusinessEdge();
     addDirectedAcyclicEdge();
     addUndirectedEdge();
@@ -224,6 +214,15 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
     return edgeUid;
   }
 
+  protected void addConceptEdge()
+  {
+    List<Pair<ConceptObject, ConceptEdgeType>> targets = Arrays.asList( //
+        new Pair<ConceptObject, ConceptEdgeType>(pConcept, cEdgeType) //
+    );
+
+    createConceptEdges(cConcept, USATestData.DEFAULT_OVER_TIME_DATE, USATestData.DEFAULT_END_TIME_DATE, USATestData.SOURCE.getDataSource(), targets);
+  }
+
   protected void addBusinessEdge()
   {
     List<Pair<VertexComponent, BusinessEdgeType>> targets = Arrays.asList( //
@@ -262,11 +261,18 @@ public abstract class EventDatasetTest extends USADatasetTest implements Instanc
       pObject = null;
     }
 
-    if (concept != null)
+    if (pConcept != null)
     {
-      this.cObjectService.delete(concept);
+      this.cObjectService.delete(pConcept);
 
-      concept = null;
+      pConcept = null;
+    }
+
+    if (cConcept != null)
+    {
+      this.cObjectService.delete(cConcept);
+
+      cConcept = null;
     }
 
     testData.logOut();

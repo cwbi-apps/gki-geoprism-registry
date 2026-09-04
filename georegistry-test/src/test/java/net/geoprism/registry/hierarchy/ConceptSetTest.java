@@ -8,27 +8,39 @@ import java.util.List;
 import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import com.runwaysdk.business.graph.EdgeObject;
 import com.runwaysdk.session.Request;
 
-import net.geoprism.registry.FastDatasetTest;
+import net.geoprism.registry.DatasetTest;
 import net.geoprism.registry.InstanceTestClassListener;
+import net.geoprism.registry.SpringInstanceTestClassRunner;
+import net.geoprism.registry.config.TestApplication;
 import net.geoprism.registry.graph.ConceptClass;
 import net.geoprism.registry.graph.ConceptEdgeType;
 import net.geoprism.registry.graph.ConceptSet;
+import net.geoprism.registry.model.ConceptObject;
 import net.geoprism.registry.service.business.ConceptClassBusinessServiceIF;
 import net.geoprism.registry.service.business.ConceptEdgeTypeBusinessServiceIF;
+import net.geoprism.registry.service.business.ConceptObjectBusinessServiceIF;
 import net.geoprism.registry.service.business.ConceptSetBusinessServiceIF;
 import net.geoprism.registry.test.FastTestDataset;
 import net.geoprism.registry.view.ConceptClassDTO;
 import net.geoprism.registry.view.ConceptEdgeTypeDTO;
 import net.geoprism.registry.view.ConceptSetDTO;
+import net.geoprism.registry.view.DiscreteType;
 
-@SuppressWarnings("unchecked")
-public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetDTO> extends FastDatasetTest implements InstanceTestClassListener
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, classes = TestApplication.class)
+@AutoConfigureMockMvc
+@RunWith(SpringInstanceTestClassRunner.class)
+public class ConceptSetTest extends DatasetTest implements InstanceTestClassListener
 {
+  private static ConceptObject             conceptObject;
+
   private static ConceptClass              conceptClass;
 
   private static ConceptEdgeType           conceptEdgeType;
@@ -39,43 +51,41 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Autowired
   private ConceptEdgeTypeBusinessServiceIF cEdgeService;
 
-  protected abstract ConceptSetBusinessServiceIF<T, D> getService();
+  @Autowired
+  private ConceptObjectBusinessServiceIF   cObjectService;
+
+  @Autowired
+  private ConceptSetBusinessServiceIF      service;
 
   @Override
+  @Request
   public void beforeClassSetup() throws Exception
   {
-    super.beforeClassSetup();
-
-    setUpClassInRequest();
-  }
-
-  @Request
-  public void setUpClassInRequest()
-  {
-    String orgCode = FastTestDataset.ORG_CGOV.getCode();
+    FastTestDataset.ORG_CGOV.apply();
 
     ConceptClassDTO dto = new ConceptClassDTO();
     dto.setCode("TEST_CONCEPT_TYPE");
-    dto.setOrganization(orgCode);
+    dto.setOrganization(FastTestDataset.ORG_CGOV.getCode());
     dto.setDisplayLabel(new LocalizedValue("TEST_CONCEPT_TYPE"));
 
     conceptClass = this.cClassService.apply(dto);
 
-    conceptEdgeType = this.cEdgeService.create(ConceptEdgeTypeDTO.build(FastTestDataset.ORG_CGOV.getCode(), "TestConceptEdge", conceptClass.getCode(), conceptClass.getCode()));
+    conceptEdgeType = this.cEdgeService.create(ConceptEdgeTypeDTO.build(FastTestDataset.ORG_CGOV.getCode(), "TestConceptEdge", conceptClass.getCode(), conceptClass.getCode(), DiscreteType.TAXONOMY));
 
+    conceptObject = this.cObjectService.newInstance(conceptClass);
+    conceptObject.setCode("Concept Object 1");
+    conceptObject.apply();
   }
 
   @Override
+  @Request
   public void afterClassSetup() throws Exception
   {
-    cleanUpClassInRequest();
+    if (conceptObject != null)
+    {
+      this.cObjectService.delete(conceptObject);
+    }
 
-    super.afterClassSetup();
-  }
-
-  @Request
-  public void cleanUpClassInRequest()
-  {
     if (conceptEdgeType != null)
     {
       this.cEdgeService.delete(conceptEdgeType);
@@ -91,9 +101,9 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testCreate()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
@@ -104,7 +114,31 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
+    }
+
+  }
+
+  @Test
+  @Request
+  public void testToDTO()
+  {
+    ConceptSetDTO dto = createDTO();
+
+    ConceptSet set = this.service.apply(dto);
+
+    try
+    {
+      ConceptSetDTO result = this.service.toDTO(set);
+
+      Assert.assertNotNull(result);
+      Assert.assertEquals(dto.getCode(), result.getCode());
+      Assert.assertEquals(dto.getDisplayLabel().getValue(), result.getDisplayLabel().getValue());
+      Assert.assertEquals(dto.getDescription().getValue(), result.getDescription().getValue());
+    }
+    finally
+    {
+      this.service.delete(set);
     }
 
   }
@@ -113,17 +147,17 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testUpdate()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
-      dto = this.getService().toDTO(set);
+      dto = this.service.toDTO(set);
       dto.setDisplayLabel(new LocalizedValue("Updated Label"));
       dto.setDescription(new LocalizedValue("Updated Description"));
 
-      set = this.getService().apply(dto);
+      set = this.service.apply(dto);
 
       Assert.assertNotNull(set);
       Assert.assertEquals(dto.getCode(), set.getCode());
@@ -132,7 +166,7 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
     }
 
   }
@@ -141,20 +175,20 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testGetByCode()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
-      set = this.getService().getByCodeOrThrow(dto.getCode());
+      set = this.service.getByCodeOrThrow(dto.getCode());
 
       Assert.assertNotNull(set);
       Assert.assertEquals(dto.getCode(), set.getCode());
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
     }
   }
 
@@ -162,13 +196,13 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testGetByAll()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
-      List<T> results = this.getService().getAll();
+      List<ConceptSet> results = this.service.getAll();
 
       Assert.assertNotNull(results);
       Assert.assertEquals(1, results.size());
@@ -176,7 +210,7 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
     }
   }
 
@@ -184,20 +218,20 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testAddConceptClass()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
-      EdgeObject edge = this.getService().addConceptClass(set, conceptClass);
+      EdgeObject edge = this.service.addConceptClass(set, conceptClass);
 
       Assert.assertNotNull(edge);
-      Assert.assertEquals(1, this.getService().getConceptClasses(set).size());
+      Assert.assertEquals(1, this.service.getConceptClasses(set).size());
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
     }
   }
 
@@ -205,18 +239,18 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testAddDuplicateConceptClass()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
-      this.getService().addConceptClass(set, conceptClass);
-      this.getService().addConceptClass(set, conceptClass);
+      this.service.addConceptClass(set, conceptClass);
+      this.service.addConceptClass(set, conceptClass);
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
     }
   }
 
@@ -224,20 +258,20 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testAddConceptEdgeType()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
-      EdgeObject edge = this.getService().addConceptEdgeType(set, conceptEdgeType);
+      EdgeObject edge = this.service.addConceptEdgeType(set, conceptEdgeType);
 
       Assert.assertNotNull(edge);
-      Assert.assertEquals(1, this.getService().getConceptEdgeTypeEdges(set).size());
+      Assert.assertEquals(1, this.service.getConceptEdgeTypeEdges(set).size());
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
     }
   }
 
@@ -245,28 +279,55 @@ public abstract class ConceptSetTest<T extends ConceptSet, D extends ConceptSetD
   @Request
   public void testAddDuplicateEdgeType()
   {
-    D dto = createDTO();
+    ConceptSetDTO dto = createDTO();
 
-    T set = this.getService().apply(dto);
+    ConceptSet set = this.service.apply(dto);
 
     try
     {
-      this.getService().addConceptEdgeType(set, conceptEdgeType);
-      this.getService().addConceptEdgeType(set, conceptEdgeType);
+      this.service.addConceptEdgeType(set, conceptEdgeType);
+      this.service.addConceptEdgeType(set, conceptEdgeType);
     }
     finally
     {
-      this.getService().delete(set);
+      this.service.delete(set);
     }
   }
 
-  public D createDTO()
+  @Test
+  @Request
+  public void testCreateWithClassAndType()
+  {
+    ConceptSetDTO dto = createDTO();
+    dto.getConceptClasses().add(conceptClass.getCode());
+    dto.getConceptEdgeTypes().add(conceptEdgeType.getCode());
+    dto.setRootTerm(conceptObject.getCode());
+
+    ConceptSet set = this.service.apply(dto);
+
+    try
+    {
+      Assert.assertNotNull(set);
+      Assert.assertNotNull(set.getRootTerm());
+      Assert.assertEquals(1, this.service.getConceptEdgeTypeEdges(set).size());
+      Assert.assertEquals(1, this.service.getConceptClasses(set).size());
+    }
+    finally
+    {
+      this.service.delete(set);
+    }
+
+  }
+
+  public ConceptSetDTO createDTO()
   {
     ConceptSetDTO dto = new ConceptSetDTO();
     dto.setCode("TEST");
     dto.setDisplayLabel(new LocalizedValue("Test Label"));
     dto.setDescription(new LocalizedValue("Test Description"));
-    return (D) dto;
+    dto.setDiscreteType(DiscreteType.TAXONOMY);
+
+    return dto;
   }
 
 }

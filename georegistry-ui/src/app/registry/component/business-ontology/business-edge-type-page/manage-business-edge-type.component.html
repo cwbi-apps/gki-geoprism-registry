@@ -63,10 +63,10 @@
       <div class="row">
         <div class="col-md-6">
           <div class="form-group">
-            <label for="parentTypeCode">
+            <label for="parentType">
               <localize key="business.type.parent"></localize>
             </label>
-            <select id="parentTypeCode" name="parentTypeCode" class="select-area" [(ngModel)]="type.parentTypeCode"
+            <select id="parentType" name="parentType" class="select-area" [(ngModel)]="type.parentType"
               [disabled]="readOnly || !isNew" required>
               <option></option>
               <option [value]="GEO_OBJECT_OPTION">
@@ -80,10 +80,10 @@
         </div>
         <div class="col-md-6">
           <div class="form-group">
-            <label for="childTypeCode">
+            <label for="childType">
               <localize key="business.type.child"></localize>
             </label>
-            <select id="childTypeCode" name="childTypeCode" class="select-area" [(ngModel)]="type.childTypeCode"
+            <select id="childType" name="childType" class="select-area" [(ngModel)]="type.childType"
               [disabled]="readOnly || !isNew" required>
               <option></option>
               <option [value]="GEO_OBJECT_OPTION">

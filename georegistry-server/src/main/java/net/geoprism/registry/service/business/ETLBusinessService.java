@@ -70,6 +70,7 @@ import net.geoprism.registry.etl.export.ExportError;
 import net.geoprism.registry.etl.export.ExportErrorQuery;
 import net.geoprism.registry.etl.export.ExportHistory;
 import net.geoprism.registry.etl.upload.ImportConfiguration;
+import net.geoprism.registry.io.view.HistoryConfigurationDTO;
 import net.geoprism.registry.io.view.ImportConfigurationDTO;
 import net.geoprism.registry.jobs.GPRJobHistory;
 import net.geoprism.registry.jobs.ImportError;
@@ -87,8 +88,8 @@ import net.geoprism.registry.model.ServerGeoObjectType;
 import net.geoprism.registry.service.permission.RolePermissionService;
 import net.geoprism.registry.view.ErrorResolveDTO;
 import net.geoprism.registry.view.ImportHistoryView;
+import net.geoprism.registry.view.JsonSerializablePage;
 import net.geoprism.registry.view.JsonWrapper;
-import net.geoprism.registry.view.Page;
 import net.geoprism.registry.view.ServerParentTreeNodeOverTime;
 import net.geoprism.registry.view.TypeClass;
 import net.geoprism.registry.view.ValidationResolveDTO;
@@ -104,9 +105,6 @@ public class ETLBusinessService
 
   @Autowired
   protected GeoObjectBusinessServiceIF     objectService;
-
-  @Autowired
-  protected TermBusinessServiceIF          termService;
 
   @Autowired
   protected GeoSynonymBusinessService      geoSynonymService;
@@ -201,7 +199,7 @@ public class ETLBusinessService
     {
       List<ImportError> results = new LinkedList<>(it.getAll());
 
-      return new Page<ImportError>(query.getCount(), query.getPageNumber(), query.getPageSize(), results).toJSON();
+      return new JsonSerializablePage<ImportError>(query.getCount(), query.getPageNumber(), query.getPageSize(), results).toJSON();
     }
   }
 
@@ -375,7 +373,7 @@ public class ETLBusinessService
         return new JsonWrapper(serializeHistory(hist, user, job));
       }).collect(Collectors.toList());
 
-      return new Page<JsonWrapper>(ihq.getCount(), ihq.getPageNumber(), ihq.getPageSize(), results).toJSON();
+      return new JsonSerializablePage<JsonWrapper>(ihq.getCount(), ihq.getPageNumber(), ihq.getPageSize(), results).toJSON();
     }
   }
 
@@ -399,7 +397,7 @@ public class ETLBusinessService
         return new JsonWrapper(serializeHistory(hist, user, job));
       }).collect(Collectors.toList());
 
-      return new Page<JsonWrapper>(ihq.getCount(), ihq.getPageNumber(), ihq.getPageSize(), results).toJSON();
+      return new JsonSerializablePage<JsonWrapper>(ihq.getCount(), ihq.getPageNumber(), ihq.getPageSize(), results).toJSON();
     }
   }
 
@@ -427,7 +425,7 @@ public class ETLBusinessService
 
       if (StringUtils.isNotBlank(iHist.getConfigJson()) && iHist.getConfigJson().startsWith("{"))
       {
-        ImportConfigurationDTO configuration = iHist.getConfigurationDTO();
+        HistoryConfigurationDTO configuration = iHist.getConfigurationDTO();
 
         jo.addProperty("fileName", configuration.getFileName());
         jo.add("configuration", JsonParser.parseString(ImportConfigurationDTO.toJson(configuration)));
@@ -479,7 +477,7 @@ public class ETLBusinessService
     {
       List<ValidationProblem> results = new LinkedList<>(it.getAll());
 
-      return new Page<ValidationProblem>(vpq.getCount(), vpq.getPageNumber(), vpq.getPageSize(), results).toJSON();
+      return new JsonSerializablePage<ValidationProblem>(vpq.getCount(), vpq.getPageNumber(), vpq.getPageSize(), results).toJSON();
     }
   }
 
@@ -497,7 +495,7 @@ public class ETLBusinessService
     {
       List<ExportError> results = new LinkedList<>(it.getAll());
 
-      return new Page<ExportError>(query.getCount(), query.getPageNumber(), query.getPageSize(), results).toJSON();
+      return new JsonSerializablePage<ExportError>(query.getCount(), query.getPageNumber(), query.getPageSize(), results).toJSON();
     }
   }
 
@@ -741,6 +739,7 @@ public class ETLBusinessService
     else if (classType.equals(TypeClass.DAG.getCode()) //
         || classType.equals(TypeClass.UNDIRECTED_GRAPH.getCode()) //
         || classType.equals(TypeClass.BUSINESS_EDGE.getCode()) //
+        || classType.equals(TypeClass.CONCEPT_EDGE.getCode()) //
         || classType.equals(TypeClass.HIERARCHY.getCode()))
     {
       // Ensure the type code is valid

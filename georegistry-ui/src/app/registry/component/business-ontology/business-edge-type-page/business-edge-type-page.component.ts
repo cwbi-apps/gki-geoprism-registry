@@ -125,8 +125,8 @@ export class BusinessEdgeTypePageComponent implements OnInit, OnDestroy, OnChang
             action: Action.CREATE,
             type: {
                 code: "",
-                childTypeCode: "",
-                parentTypeCode: "",
+                childType: "",
+                parentType: "",
                 label: this.localizeService.create(),
                 description: this.localizeService.create(),
                 organizationCode: organization.code,

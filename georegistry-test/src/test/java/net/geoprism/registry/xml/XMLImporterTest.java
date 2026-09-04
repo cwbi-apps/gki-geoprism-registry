@@ -13,7 +13,6 @@ import org.apache.commons.io.FileUtils;
 import org.commongeoregistry.adapter.constants.GeometryType;
 import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
 import org.commongeoregistry.adapter.metadata.HierarchyNode;
-import org.commongeoregistry.adapter.metadata.OrganizationDTO;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -24,123 +23,85 @@ import org.springframework.boot.test.context.SpringBootTest;
 import com.runwaysdk.resource.StreamResource;
 import com.runwaysdk.session.Request;
 
+import net.geoprism.registry.ConceptDatasetTest;
 import net.geoprism.registry.InstanceTestClassListener;
 import net.geoprism.registry.SpringInstanceTestClassRunner;
-import net.geoprism.registry.classification.ClassificationTypeTest;
 import net.geoprism.registry.config.TestApplication;
-import net.geoprism.registry.graph.AttributeClassificationType;
 import net.geoprism.registry.graph.AttributeType;
 import net.geoprism.registry.graph.BusinessEdgeType;
 import net.geoprism.registry.graph.BusinessType;
-import net.geoprism.registry.model.Classification;
-import net.geoprism.registry.model.ClassificationType;
+import net.geoprism.registry.graph.ConceptClass;
+import net.geoprism.registry.graph.ConceptEdgeType;
 import net.geoprism.registry.model.ServerElement;
 import net.geoprism.registry.model.ServerGeoObjectType;
 import net.geoprism.registry.model.ServerHierarchyType;
-import net.geoprism.registry.model.ServerOrganization;
 import net.geoprism.registry.service.business.BusinessEdgeTypeBusinessServiceIF;
 import net.geoprism.registry.service.business.BusinessTypeBusinessServiceIF;
-import net.geoprism.registry.service.business.ClassificationBusinessServiceIF;
-import net.geoprism.registry.service.business.ClassificationTypeBusinessServiceIF;
 import net.geoprism.registry.service.business.GraphRepoServiceIF;
 import net.geoprism.registry.service.business.HierarchyTypeBusinessServiceIF;
-import net.geoprism.registry.service.business.OrganizationBusinessServiceIF;
-import net.geoprism.registry.service.business.ServiceFactory;
+import net.geoprism.registry.test.TestOrganizationInfo;
+import net.geoprism.registry.test.USATestData;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, classes = TestApplication.class)
 @AutoConfigureMockMvc
 
 @RunWith(SpringInstanceTestClassRunner.class)
-public class XMLImporterTest implements InstanceTestClassListener
+public class XMLImporterTest extends ConceptDatasetTest implements InstanceTestClassListener
 {
 
-  private ClassificationType                  type      = null;
-
-  private String                              ROOT_CODE = "Test_Classification";
+  @Autowired
+  private GraphRepoServiceIF                graphRepo;
 
   @Autowired
-  private GraphRepoServiceIF                  graphRepo;
+  private HierarchyTypeBusinessServiceIF    hierarchyBizService;
 
   @Autowired
-  private OrganizationBusinessServiceIF       orgService;
+  private BusinessTypeBusinessServiceIF     bizService;
 
   @Autowired
-  private HierarchyTypeBusinessServiceIF      hierarchyBizService;
+  private BusinessEdgeTypeBusinessServiceIF bizEdgeService;
 
-  @Autowired
-  private BusinessTypeBusinessServiceIF       bizService;
-
-  @Autowired
-  private BusinessEdgeTypeBusinessServiceIF   bizEdgeService;
-
-  @Autowired
-  private ClassificationTypeBusinessServiceIF cTypeService;
-
-  @Autowired
-  private ClassificationBusinessServiceIF     cService;
+  @Override
+  protected TestOrganizationInfo getOrganization()
+  {
+    return new TestOrganizationInfo("TEST_ORG");
+  }
 
   @Override
   @Request
   public void beforeClassSetup() throws Exception
   {
-    setupClasses();
+    this.getOrganization().apply();
+
+    super.beforeClassSetup();
   }
 
   @Override
   @Request
   public void afterClassSetup() throws Exception
   {
-    if (type != null)
-    {
-      this.cTypeService.delete(type);
+    super.afterClassSetup();
 
-      type = null;
-    }
-  }
-
-  public void setupClasses()
-  {
-    setUpClassInRequest();
-  }
-
-  @Request
-  private void setUpClassInRequest()
-  {
-    type = this.cTypeService.apply(ClassificationTypeTest.createMock());
-
-    Classification root = this.cService.newInstance(type);
-    root.setCode(ROOT_CODE);
-    root.setDisplayLabel(new LocalizedValue("Test Classification"));
-    this.cService.apply(root, null);
+    USATestData.ORG_NPS.delete();
   }
 
   @Request
   @Test
   public void testImportAndExport() throws Exception
   {
-    // ServerOrganization organization = new ServerOrganization();
-    // organization.setCode("TEST_ORG");
-    // organization.getDisplayLabel().setValue("Test Org");
-    // organization.apply();
-
-    OrganizationDTO org = new OrganizationDTO("TEST_ORG", new LocalizedValue("Test Org"), new LocalizedValue(""), true, null, new LocalizedValue(""));
-    ServerOrganization serverOrg = orgService.create(org);
-
-    ServiceFactory.getMetadataCache().addOrganization(serverOrg);
-
     try (InputStream istream = this.getClass().getResourceAsStream("/xml/test-domain.xml"))
     {
       XMLImporter xmlImporter = new XMLImporter();
 
-      List<ServerElement> results = xmlImporter.importXMLDefinitions(new StreamResource(istream, "test-domain.xml"), serverOrg);
+      List<ServerElement> results = xmlImporter.importXMLDefinitions(new StreamResource(istream, "test-domain.xml"), this.getOrganization().getServerObject());
 
       try
       {
         graphRepo.refreshMetadataCache();
 
-        Assert.assertEquals(8, results.size());
+        Assert.assertEquals(10, results.size());
 
-        ServerGeoObjectType type = ServerGeoObjectType.get(results.get(0).getCode());
+        ServerGeoObjectType type = ServerGeoObjectType.get("TEST_VILLAGE");
 
         Assert.assertEquals("TEST_VILLAGE", type.getCode());
         Assert.assertEquals("Test Village", type.getLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
@@ -189,17 +150,7 @@ public class XMLImporterTest implements InstanceTestClassListener
         Assert.assertEquals("Test Decimal", attributeType.getLocalizedLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
         Assert.assertEquals("Test Decimal Description", attributeType.getLocalizedDescription().getValue(LocalizedValue.DEFAULT_LOCALE));
 
-        oattribute = type.getAttribute("TEST_CLASSIFICATION");
-
-        Assert.assertTrue(oattribute.isPresent());
-
-        attributeType = oattribute.get();
-        Assert.assertEquals("Test Classification", attributeType.getLocalizedLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
-        Assert.assertEquals("Test Text Classification", attributeType.getLocalizedDescription().getValue(LocalizedValue.DEFAULT_LOCALE));
-        Assert.assertEquals("TEST_PROG", ( (AttributeClassificationType) attributeType ).getClassificationType().getCode());
-        Assert.assertEquals(ROOT_CODE, ( (AttributeClassificationType) attributeType ).getRootClassification().getCode());
-
-        type = ServerGeoObjectType.get(results.get(1).getCode());
+        type = ServerGeoObjectType.get("TEST_GI");
 
         Assert.assertEquals("TEST_GI", type.getCode());
         Assert.assertEquals("Test GI", type.getLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
@@ -209,7 +160,7 @@ public class XMLImporterTest implements InstanceTestClassListener
         Assert.assertFalse(type.getIsAbstract());
         Assert.assertEquals("TEST_VILLAGE", type.getSuperType().getCode());
 
-        ServerHierarchyType hierarchy = ServerHierarchyType.get(results.get(3).getCode());
+        ServerHierarchyType hierarchy = ServerHierarchyType.get("TEST_HIERARCHY");
 
         Assert.assertEquals("TEST_HIERARCHY", hierarchy.getCode());
         Assert.assertEquals("Test Hierarchy", hierarchy.getLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
@@ -236,24 +187,39 @@ public class XMLImporterTest implements InstanceTestClassListener
 
         Assert.assertEquals("TEST_VILLAGE", node.getGeoObjectType().getCode());
 
-        BusinessType businessType = bizService.getByCodeOrThrow(results.get(4).getCode());
+        BusinessType businessType = bizService.getByCodeOrThrow("BUSINESS_POP");
 
         Assert.assertEquals("BUSINESS_POP", businessType.getCode());
         Assert.assertEquals("Business Pop", businessType.getLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
         Assert.assertEquals("TEST_TEXT", businessType.getLabelAttribute().getAttributeName());
+        Assert.assertEquals(7, businessType.getAttributes().size());
 
         AttributeType businessAttribute = businessType.getAttribute("TEST_TEXT").orElseThrow();
 
         Assert.assertEquals("Test Text", businessAttribute.getLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
         Assert.assertEquals("Test Text Description", businessAttribute.getDescription().getValue(LocalizedValue.DEFAULT_LOCALE));
 
-        BusinessEdgeType businessEdge = bizEdgeService.getByCodeOrThrow(results.get(6).getCode());
+        BusinessEdgeType businessEdge = bizEdgeService.getByCodeOrThrow("BUS_EDGE");
         Assert.assertEquals("BUS_EDGE", businessEdge.getCode());
 
-        BusinessEdgeType businessGeoEdge = bizEdgeService.getByCodeOrThrow(results.get(7).getCode());
+        BusinessEdgeType businessGeoEdge = bizEdgeService.getByCodeOrThrow("BUS_GEO_EDGE");
         Assert.assertEquals("BUS_GEO_EDGE", businessGeoEdge.getCode());
 
-        XMLExporter exporter = new XMLExporter(serverOrg);
+        ConceptClass conceptClass = cClassService.getByCodeOrThrow("CONCEPT_POP");
+
+        Assert.assertEquals("CONCEPT_POP", conceptClass.getCode());
+        Assert.assertEquals("Concept Pop", conceptClass.getLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
+        Assert.assertEquals(7, conceptClass.getAttributes().size());
+
+        AttributeType conceptAttribute = conceptClass.getAttribute("TEST_TEXT").orElseThrow();
+
+        Assert.assertEquals("Test Text", conceptAttribute.getLabel().getValue(LocalizedValue.DEFAULT_LOCALE));
+        Assert.assertEquals("Test Text Description", conceptAttribute.getDescription().getValue(LocalizedValue.DEFAULT_LOCALE));
+
+        ConceptEdgeType conceptEdge = cEdgeTypeService.getByCodeOrThrow("CONCEPT_POP_EDGE");
+        Assert.assertEquals("CONCEPT_POP_EDGE", conceptEdge.getCode());
+
+        XMLExporter exporter = new XMLExporter(this.getOrganization().getServerObject());
         exporter.build();
 
         File file = File.createTempFile("test", ".xml");
@@ -274,12 +240,6 @@ public class XMLImporterTest implements InstanceTestClassListener
       {
         deleteObjects(results);
       }
-    }
-    finally
-    {
-      this.orgService.delete(serverOrg);
-
-      ServiceFactory.getMetadataCache().removeOrganization(serverOrg.getCode());
     }
   }
 

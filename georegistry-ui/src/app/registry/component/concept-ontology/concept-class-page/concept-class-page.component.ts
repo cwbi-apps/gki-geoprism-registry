@@ -89,8 +89,8 @@ export class ConceptClassPageComponent implements OnInit, OnChanges {
 
     ngOnChanges(changes: SimpleChanges) {
         if (changes['types'] || changes['organizations']) {
-            const organizations = changes['organizations'] ? changes['organizations'].currentValue : this.organizations;
-            const types = changes['types'] ? changes['types'].currentValue : this.types;
+            const organizations: Organization[] = changes['organizations'] ? changes['organizations'].currentValue : this.organizations;
+            const types: ConceptClass[] = changes['types'] ? changes['types'].currentValue : this.types;
 
             this.typesByOrg = [];
 
@@ -202,7 +202,7 @@ export class ConceptClassPageComponent implements OnInit, OnChanges {
     }
 
     onImportHistory(type: ConceptClass): void {
-        this.registryService.getImportHistory('BUSINESS_OBJECT', type.code).then(histories => {
+        this.registryService.getImportHistory('CONCEPT_OBJECT', type.code).then(histories => {
             const bsModalRef = this.modalService.show(ImportHistoryModalComponent, {
                 animated: false, backdrop: true,
                 ignoreBackdropClick: true

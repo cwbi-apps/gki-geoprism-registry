@@ -52,7 +52,7 @@ import net.geoprism.registry.graph.BusinessEdgeType;
 import net.geoprism.registry.graph.BusinessType;
 import net.geoprism.registry.jobs.ImportHistory;
 import net.geoprism.registry.model.BusinessObject;
-import net.geoprism.registry.model.Classification;
+import net.geoprism.registry.model.ConceptObject;
 import net.geoprism.registry.model.GraphType;
 import net.geoprism.registry.model.ServerGeoObjectIF;
 import net.geoprism.registry.model.ServerGeoObjectType;
@@ -183,7 +183,7 @@ public class RepoRDFExportBusinessService
   private static final Logger               logger     = LoggerFactory.getLogger(RepoRDFExportBusinessService.class);
 
   @Autowired
-  private ClassificationBusinessServiceIF   classificationService;
+  private ConceptObjectBusinessServiceIF    cObjectService;
 
   @Autowired
   private GeoObjectBusinessServiceIF        objectService;
@@ -357,11 +357,12 @@ public class RepoRDFExportBusinessService
 
         if (value != null)
         {
-          String classificationTypeCode = ( (AttributeClassificationType) attribute ).getClassificationType();
+          ConceptObject classification = this.cObjectService.getByCode((AttributeClassificationType) attribute, value).orElse(null);
 
-          Classification classification = this.classificationService.get((AttributeClassificationType) attribute, value).get();
-
-          literal = classification.getCode();
+          if (classification != null)
+          {
+            literal = classification.getCode();
+          }
         }
         else
         {
@@ -478,9 +479,12 @@ public class RepoRDFExportBusinessService
 
         if (value != null)
         {
-          Classification classification = this.classificationService.get((AttributeClassificationType) attribute, value).get();
+          ConceptObject classification = this.cObjectService.getByCode((AttributeClassificationType) attribute, value).orElse(null);
 
-          literal = classification.getCode();
+          if (classification != null)
+          {
+            literal = classification.getCode();
+          }
         }
         else
         {

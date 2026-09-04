@@ -106,6 +106,8 @@ export class RelationshipVisualizerComponent implements OnInit, OnDestroy {
 
     public typeCache: GeoObjectTypeCache;
 
+    public selectedEdge: any = null;
+
     relationship: Relationship = null;
     relationships: Relationship[];
 
@@ -217,6 +219,16 @@ export class RelationshipVisualizerComponent implements OnInit, OnDestroy {
         }
     }
 
+    public confirmingDelete: boolean = false;
+
+    public requestDeleteConfirmation(): void {
+        this.confirmingDelete = true;
+    }
+
+    public cancelDeleteConfirmation(): void {
+        this.confirmingDelete = false;
+    }
+
     resizeDimensions(): void {
         let graphContainer = document.getElementById("graph-container");
 
@@ -273,7 +285,7 @@ export class RelationshipVisualizerComponent implements OnInit, OnDestroy {
             const allRelationships = (resp.relationships || []).map(obj => ({
                 ...obj,
                 oid: obj.oid ?? obj.code
-                }));
+            }));
 
             /*
             * Hide zero-count relationships whenever at least one relationship
@@ -421,9 +433,9 @@ export class RelationshipVisualizerComponent implements OnInit, OnDestroy {
 
                     if (!changeStabilityPeriod && data.stabilityPeriods.length > 0) {
                         this.stabilityPeriods = data.stabilityPeriods;
-                        this.selectedPeriodStartDate = this.stabilityPeriods[this.stabilityPeriods.length-1].startDate;
+                        this.selectedPeriodStartDate = this.stabilityPeriods[this.stabilityPeriods.length - 1].startDate;
                     }
-                    
+
                     this.resizeDimensions();
                     this.calculateTypeLegend(this.data.relatedTypes);
                     this.addLayers(this.data.relatedTypes);
@@ -717,6 +729,73 @@ export class RelationshipVisualizerComponent implements OnInit, OnDestroy {
         } else {
             return DIMENSIONS.LABEL.WIDTH + DIMENSIONS.PADDING.NODE_LABEL;
         }
+    }
+
+    public onClickEdge(edge: any, event: MouseEvent): void {
+        event.stopPropagation();
+
+        this.selectedEdge = edge;
+    }
+
+    public closeEdgePopup(): void {
+        this.selectedEdge = null;
+        this.confirmingDelete = false;
+    }
+
+    public getEdgeAttributes(edge: any): { key: string, value: any }[] {
+        if (edge == null) {
+            return [];
+        }
+
+        const source = this.data?.verticies?.find(vertex => vertex.id === edge.source);
+        const target = this.data?.verticies?.find(vertex => vertex.id === edge.target);
+
+        return [
+            {
+                key: "From",
+                value: source?.label ?? edge.source
+            },
+            {
+                key: "To",
+                value: target?.label ?? edge.target
+            },
+            {
+                key: "Start Date",
+                value: edge.startDate ?? ""
+            },
+            {
+                key: "End Date",
+                value: edge.endDate ?? ""
+            }
+        ];
+    }
+
+    public deleteSelectedEdge(): void {
+        if (this.selectedEdge == null) {
+            return;
+        }
+
+        const edgeOid = this.selectedEdge.id.substring(2);
+
+        this.vizService.deleteEdge(
+            this.relationship.type,
+            this.relationship.code,
+            edgeOid
+        ).then(() => {
+            this.closeEdgePopup();
+
+            /*
+            * Refresh relationships as well as graph data because deleting the
+            * edge changes the relationship count. fetchRelationships() will
+            * subsequently reload the selected graph.
+            */
+            this.fetchRelationships();
+        }).catch((err: HttpErrorResponse) => {
+            /*
+            * Keep the popup open so the user can retry or cancel.
+            */
+            this.error(err);
+        });
     }
 
     public error(err: HttpErrorResponse): void {

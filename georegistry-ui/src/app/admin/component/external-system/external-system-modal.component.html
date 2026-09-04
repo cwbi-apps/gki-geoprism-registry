@@ -177,7 +177,20 @@
         </div>
         <div class="holder">
           <span class="text">
-            <input type="text" (focusout)="dhis2FocusOut()" [(ngModel)]="system.url" name="url" required>
+            <input type="text" (focusout)="dhis2FocusOut()" [(ngModel)]="system.url" name="url" required pattern="^https?://[^/:]+:\d+(/.*)?$" #url="ngModel">
+            <div *ngIf="url.invalid && (url.dirty || url.touched)"
+                class="text-danger"
+                style="margin-top: 5px;">
+
+              <span *ngIf="url.errors?.['required']">
+                URL is required.
+              </span>
+
+              <span *ngIf="url.errors?.['pattern']">
+                URL must include a protocol and port, e.g. https://example.com:8182/.
+                <span *ngIf="system.type === 'JenaExternalSystem'">Do not include the '/sparql' path.</span>
+              </span>
+            </div>
           </span>
         </div>
       </div>
@@ -211,6 +224,25 @@
           </span>
         </div>
       </div>
+      
+      <div *ngIf="system.type === 'JenaExternalSystem'" class="row-holder">
+        <div class="label-holder">
+          <label>
+            <localize key="external.system.authType"></localize>
+          </label>
+        </div>
+        <div class="holder">
+          <span class="text">
+            <select type="text" [ngModel]="system.authTypeS || ''" (ngModelChange)="system.authTypeS = $event" name="authType" [disabled]="false">
+              <option value=""><localize key="external.system.authType.none"></localize></option>
+              <option value="IAM">
+                <localize key="external.system.authType.iam"></localize>
+              </option>
+            </select>
+          </span>
+        </div>
+      </div>
+      
 
       <!--           <div class="row-holder"> -->
       <!-- 	        <div  class="label-holder"> -->
