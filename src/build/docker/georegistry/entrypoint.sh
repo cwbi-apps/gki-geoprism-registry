@@ -42,6 +42,9 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
     --clean=true
 
   echo "Database rebuild complete."
+  echo "This is a rebuild-only image. Deploy a normal image to start GeoPrism."
+
+  exec tail -f /dev/null
 fi
 
 export CATALINA_OPTS
