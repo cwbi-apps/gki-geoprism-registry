@@ -65,6 +65,18 @@ server.createContext("/actuator/health", exchange -> {
         os.write(response);
     }
 });
+server.createContext("/", exchange -> {
+    byte[] response =
+        "Database rebuild complete! Please launch a standard deploy.\n"
+            .getBytes(StandardCharsets.UTF_8);
+
+    exchange.getResponseHeaders().set("Content-Type", "text/plain");
+    exchange.sendResponseHeaders(200, response.length);
+
+    try (var os = exchange.getResponseBody()) {
+        os.write(response);
+    }
+});
 
 server.start();
 
