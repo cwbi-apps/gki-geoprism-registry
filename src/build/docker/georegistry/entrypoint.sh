@@ -54,10 +54,10 @@ import java.nio.charset.StandardCharsets;
 
 var server = HttpServer.create(new InetSocketAddress(8080), 0);
 
-server.createContext("/", exchange -> {
-    byte[] response = "OK\n".getBytes(StandardCharsets.UTF_8);
+server.createContext("/actuator/health", exchange -> {
+    byte[] response = "{\"status\":\"UP\"}\n".getBytes(StandardCharsets.UTF_8);
 
-    exchange.getResponseHeaders().set("Content-Type", "text/plain");
+    exchange.getResponseHeaders().set("Content-Type", "application/json");
 
     exchange.sendResponseHeaders(200, response.length);
 
