@@ -17,6 +17,11 @@ DATABASE_USE_LOCK="${LOCK_DIR}/database-use.lock"
 
 mkdir -p "${LOCK_DIR}"
 
+command -v flock >/dev/null 2>&1 || {
+  echo "ERROR: flock is required but is not installed."
+  exit 1
+}
+
 ORIENTDB_URL="$ORIENTDB_HOST"
 
 case "$ORIENTDB_URL" in
@@ -39,6 +44,36 @@ CATALINA_OPTS="${CATALINA_OPTS} -Dgeoprism.origin=gki-gpr.dev.cwbi.us"
 
 export CATALINA_OPTS
 
+start_health_server() {
+  echo "Starting health-check server on port 8080..."
+
+  exec jshell --add-modules jdk.httpserver <<'EOF'
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+
+var server = HttpServer.create(new InetSocketAddress(8080), 0);
+
+server.createContext("/", exchange -> {
+    byte[] response = "OK\n".getBytes(StandardCharsets.UTF_8);
+
+    exchange.getResponseHeaders().set("Content-Type", "text/plain");
+
+    exchange.sendResponseHeaders(200, response.length);
+
+    try (var os = exchange.getResponseBody()) {
+        os.write(response);
+    }
+});
+
+server.start();
+
+System.out.println("Health-check server listening on port 8080.");
+
+Thread.currentThread().join();
+EOF
+}
+
 if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
   : "${POSTGRES_ROOT_USERNAME:?POSTGRES_ROOT_USERNAME is required when REBUILD_DATABASE=true}"
   : "${POSTGRES_ROOT_PASSWORD:?POSTGRES_ROOT_PASSWORD is required when REBUILD_DATABASE=true}"
@@ -47,37 +82,34 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
   echo "Lock directory: ${LOCK_DIR}"
 
   #
-  # Rebuild election lock.
+  # Only one rebuild task is allowed to perform the rebuild.
   #
-  # Only one rebuild task is allowed to become the active builder.
-  # This is non-blocking because duplicate ECS tasks should simply
-  # sit idle rather than queue up and rebuild the database again later.
+  # FD 8 remains open for the lifetime of this container.
   #
   exec 8>"${REBUILD_LOCK}"
 
   if ! flock -n 8; then
     echo "Another ECS task already owns the database rebuild lock."
-    echo "This rebuild task will remain idle."
+    echo "This task will not rebuild the database."
+    echo "Starting health-check server instead."
 
-    exec tail -f /dev/null
+    start_health_server
   fi
 
   echo "Database rebuild lock acquired."
   echo "This task is the active database builder."
 
   #
-  # Database-use lock.
+  # Acquire the database-use lock exclusively.
   #
-  # Normal GeoPrism instances hold a shared lock for their entire
-  # lifetime. The database builder requires an exclusive lock.
-  #
-  # Therefore this blocks until all live GeoPrism application
+  # Normal GeoPrism instances hold this lock in shared mode.
+  # This call therefore waits until all currently-running application
   # instances have exited.
   #
   exec 9>"${DATABASE_USE_LOCK}"
 
   echo "Waiting for all live GeoPrism instances to stop..."
-  echo "Attempting to acquire exclusive database-use lock."
+  echo "Attempting to acquire exclusive database-use lock..."
 
   flock 9
 
@@ -98,28 +130,28 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
   echo "Database rebuild complete."
 
   #
-  # Release only the database-use lock.
+  # Release the exclusive database-use lock.
   #
-  # Keep FD 8 / the rebuild election lock for the lifetime of this
-  # container. This prevents another duplicate rebuild task from
-  # acquiring it after this rebuild finishes and rebuilding again.
+  # Keep FD 8 open so this task continues to own the rebuild-election
+  # lock until the container itself is terminated.
   #
   flock -u 9
   exec 9>&-
 
   echo "Database-use lock released."
-  echo "Rebuild task will remain idle."
-  echo "The database-rebuild lock will remain held by this container."
+  echo "Database rebuild task is complete."
+  echo "This task will remain alive only to satisfy health checks."
 
-  exec tail -f /dev/null
+  start_health_server
 fi
 
 #
-# Normal GeoPrism application mode.
+# Normal application mode.
 #
-# Hold a shared database-use lock for the entire lifetime of Tomcat.
-# Multiple normal application instances may coexist, but a rebuild
-# requiring the exclusive lock cannot begin until they have all exited.
+# Every normal GeoPrism instance holds a shared lock for its entire
+# lifetime. Multiple application instances may coexist, but the
+# database builder cannot acquire its exclusive lock until all of them
+# have exited.
 #
 exec 9>"${DATABASE_USE_LOCK}"
 
