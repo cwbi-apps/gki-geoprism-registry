@@ -98,7 +98,7 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
   #
   # FD 8 remains open for the lifetime of this container.
   #
-  exec 8>"${REBUILD_LOCK}"
+  exec 8<>"${REBUILD_LOCK}"
 
   if ! flock -n 8; then
     echo "Another ECS task already owns the database rebuild lock."
@@ -118,7 +118,7 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
   # This call therefore waits until all currently-running application
   # instances have exited.
   #
-  exec 9>"${DATABASE_USE_LOCK}"
+  exec 9<>"${DATABASE_USE_LOCK}"
 
   echo "Waiting for all live GeoPrism instances to stop..."
   echo "Attempting to acquire exclusive database-use lock..."
@@ -165,7 +165,7 @@ fi
 # database builder cannot acquire its exclusive lock until all of them
 # have exited.
 #
-exec 9>"${DATABASE_USE_LOCK}"
+exec 9<>"${DATABASE_USE_LOCK}"
 
 echo "Acquiring shared database-use lock..."
 
