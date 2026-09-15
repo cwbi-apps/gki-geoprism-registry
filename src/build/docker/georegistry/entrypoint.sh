@@ -41,6 +41,8 @@ CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.port=${POSTGRES_PORT}"
 CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.user=${DATABASE_USERNAME}"
 CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.password=${DATABASE_PASSWORD}"
 CATALINA_OPTS="${CATALINA_OPTS} -Dgeoprism.origin=gki-gpr.dev.cwbi.us"
+CATALINA_OPTS="${CATALINA_OPTS} -Dmapboxgl.accessToken=${MAPBOX_KEY:-}"
+
 
 export CATALINA_OPTS
 
