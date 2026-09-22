@@ -1,20 +1,34 @@
-name: Build Image, Push to Dev
+name: Deploy
 
 on:
   push:
     branches:
       - main
+
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+
+      ref:
+        description: Git commit SHA, branch, or tag to deploy
+        required: true
+        default: main
 
 concurrency:
-  group: dev-image-${{ github.ref }}
-  cancel-in-progress: true
+  group: geoprism-deploy-${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
   AWS_REGION: us-gov-west-1
   ECR_REPOSITORY: kaleidoscope-gki/geoprism-registry
-  NODE_VERSION: "22"
   JAVA_VERSION: "17"
+  DEPLOY_ENV: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
 
 permissions:
   id-token: write
@@ -29,6 +43,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+
+      - name: Resolve commit SHA
+        id: git
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -64,11 +85,28 @@ jobs:
           echo "Docker build context:"
           find "$DOCKER_CONTEXT/target" -maxdepth 2 -type f -print
 
+      - name: Configure deployment environment
+        run: |
+          set -euo pipefail
+
+          case "$DEPLOY_ENV" in
+            dev)
+              echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::718787032875:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
+              ;;
+            test)
+              echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::276847049069:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported deployment environment: $DEPLOY_ENV"
+              exit 1
+              ;;
+          esac
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws-us-gov:iam::718787032875:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
@@ -82,22 +120,24 @@ jobs:
       - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_SHA: ${{ github.sha }}
+          IMAGE_SHA: ${{ steps.git.outputs.sha }}
         working-directory: src/build/docker/georegistry
         run: |
           set -euo pipefail
 
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY"
 
-          echo "Building image: $IMAGE"
+          echo "Environment: $DEPLOY_ENV"
+          echo "Commit:      $IMAGE_SHA"
+          echo "Image:       $IMAGE"
 
           docker build \
-            --tag "$IMAGE:dev" \
+            --tag "$IMAGE:$DEPLOY_ENV" \
             --tag "$IMAGE:$IMAGE_SHA" \
             .
 
           docker push "$IMAGE:$IMAGE_SHA"
-          docker push "$IMAGE:dev"
+          docker push "$IMAGE:$DEPLOY_ENV"
 
       - name: Log out of Amazon ECR
         if: always() && steps.login-ecr.outcome == 'success'
