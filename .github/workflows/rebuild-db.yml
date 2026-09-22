@@ -14,7 +14,7 @@ on:
       ref:
         description: Git commit SHA, branch, or tag to deploy
         required: true
-        default: main
+        default: master
 
 concurrency:
   group: database-rebuild-${{ inputs.environment }}

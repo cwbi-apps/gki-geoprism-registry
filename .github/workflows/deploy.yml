@@ -3,7 +3,7 @@ name: Deploy
 on:
   push:
     branches:
-      - main
+      - master
 
   workflow_dispatch:
     inputs:
@@ -18,7 +18,7 @@ on:
       ref:
         description: Git commit SHA, branch, or tag to deploy
         required: true
-        default: main
+        default: master
 
 concurrency:
   group: geoprism-deploy-${{ github.event_name == 'push' && 'dev' || inputs.environment }}
