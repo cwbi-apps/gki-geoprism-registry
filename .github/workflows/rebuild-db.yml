@@ -47,6 +47,29 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Configure deployment environment
+        run: |
+          set -euo pipefail
+
+          case "$DEPLOY_ENV" in
+            dev)
+              echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::718787032875:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
+              ;;
+            test)
+              echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::276847049069:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported deployment environment: $DEPLOY_ENV"
+              exit 1
+              ;;
+          esac
+
+      - name: Print target environment
+        run: |
+          set -euo pipefail
+      
+          echo "Deploying to Environment:      $DEPLOY_ENV"
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -81,23 +104,6 @@ jobs:
           echo "Docker build context:"
           find "$DOCKER_CONTEXT/target" -maxdepth 2 -type f -print
 
-      - name: Configure deployment environment
-        run: |
-          set -euo pipefail
-
-          case "$DEPLOY_ENV" in
-            dev)
-              echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::718787032875:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
-              ;;
-            test)
-              echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::276847049069:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
-              ;;
-            *)
-              echo "Unsupported deployment environment: $DEPLOY_ENV"
-              exit 1
-              ;;
-          esac
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -105,8 +111,33 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
 
       - name: Verify AWS identity
-        run: aws sts get-caller-identity
-
+        run: |
+          set -euo pipefail
+      
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+      
+          case "$DEPLOY_ENV" in
+            dev)
+              EXPECTED_ACCOUNT="718787032875"
+              ;;
+            test)
+              EXPECTED_ACCOUNT="276847049069"
+              ;;
+            *)
+              echo "Unsupported environment: $DEPLOY_ENV"
+              exit 1
+              ;;
+          esac
+      
+          echo "Environment:      $DEPLOY_ENV"
+          echo "AWS account:      $ACCOUNT_ID"
+          echo "Expected account: $EXPECTED_ACCOUNT"
+      
+          if [ "$ACCOUNT_ID" != "$EXPECTED_ACCOUNT" ]; then
+            echo "ERROR: AWS account does not match selected environment."
+            exit 1
+          fi
+      
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
