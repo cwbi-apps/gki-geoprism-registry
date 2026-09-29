@@ -161,6 +161,8 @@ jobs:
 
           docker build \
             --build-arg REBUILD_DATABASE=true \
+            --build-arg CONTEXT_NAME=gpr \
+            --build-arg DEPLOY_ENV="$DEPLOY_ENV" \
             --tag "$IMAGE:$DEPLOY_ENV" \
             --tag "$IMAGE:$IMAGE_SHA" \
             .

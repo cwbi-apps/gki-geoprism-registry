@@ -11,6 +11,42 @@ set -eu
 : "${DATABASE_USERNAME:?DATABASE_USERNAME is required}"
 : "${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}"
 
+#
+# Webapp location / context path
+#
+CONTEXT_NAME="${CONTEXT_NAME:-ROOT}"
+WEBAPP_DIR="${CATALINA_HOME}/webapps/${CONTEXT_NAME}"
+
+if [ "${CONTEXT_NAME}" = "ROOT" ]; then
+  CONTEXT_PATH=""
+else
+  # Tomcat uses '#' for nested paths: apps#gpr -> /apps/gpr
+  CONTEXT_PATH="/$(printf '%s' "${CONTEXT_NAME}" | tr '#' '/')"
+fi
+
+#
+# Public URL of the registry (emails, OAuth redirect_uri, links)
+#
+if [ -z "${GEOPRISM_REMOTE_URL:-}" ]; then
+  case "${DEPLOY_ENV:-}" in
+    dev)  GEOPRISM_PUBLIC_HOST="https://gki.dev.cwbi.us" ;;
+    test) GEOPRISM_PUBLIC_HOST="https://gki-test.cwbi.us" ;;
+    prod) GEOPRISM_PUBLIC_HOST="https://gki.cwbi.us" ;;
+    *)
+      echo "ERROR: Set GEOPRISM_REMOTE_URL, or DEPLOY_ENV to dev|test (got '${DEPLOY_ENV:-}')."
+      exit 1
+      ;;
+  esac
+
+  GEOPRISM_REMOTE_URL="${GEOPRISM_PUBLIC_HOST}${CONTEXT_PATH}/"
+fi
+
+# Read by the rebuild-mode health server (jshell)
+export CONTEXT_PATH
+
+echo "Context path:        ${CONTEXT_PATH:-/}"
+echo "geoprism.remote.url: ${GEOPRISM_REMOTE_URL}"
+
 LOCK_DIR="/data/geoprism/locks"
 REBUILD_LOCK="${LOCK_DIR}/database-rebuild.lock"
 DATABASE_USE_LOCK="${LOCK_DIR}/database-use.lock"
@@ -42,8 +78,9 @@ CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.hostURL=${POSTGRES_HOSTNAME}"
 CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.port=${POSTGRES_PORT}"
 CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.user=${DATABASE_USERNAME}"
 CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.password=${DATABASE_PASSWORD}"
-CATALINA_OPTS="${CATALINA_OPTS} -Dgeoprism.origin=gki-gpr.dev.cwbi.us"
+CATALINA_OPTS="${CATALINA_OPTS} -Dgeoprism.origin=gki.cwbi.us"
 CATALINA_OPTS="${CATALINA_OPTS} -Dmapboxgl.accessToken=${MAPBOX_KEY:-}"
+CATALINA_OPTS="${CATALINA_OPTS} -Dgeoprism.remote.url=${GEOPRISM_REMOTE_URL}"
 
 export CATALINA_OPTS
 
@@ -51,6 +88,7 @@ start_health_server() {
   echo "Starting rebuild health-check server on port 8080..."
 
   jshell --add-modules jdk.httpserver <<'EOF' &
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -59,7 +97,7 @@ import java.nio.file.Path;
 
 var server = HttpServer.create(new InetSocketAddress(8080), 0);
 
-server.createContext("/actuator/health", exchange -> {
+HttpHandler health = exchange -> {
     byte[] response =
         "{\"status\":\"UP\"}\n".getBytes(StandardCharsets.UTF_8);
 
@@ -71,8 +109,18 @@ server.createContext("/actuator/health", exchange -> {
     try (var os = exchange.getResponseBody()) {
         os.write(response);
     }
-});
+};
 
+// Health checks may arrive at the root or under the context path (e.g. /gpr/actuator/health)
+server.createContext("/actuator/health", health);
+
+var contextPath = System.getenv().getOrDefault("CONTEXT_PATH", "");
+
+if (!contextPath.isEmpty()) {
+    server.createContext(contextPath + "/actuator/health", health);
+}
+
+// Everything else (/, /gpr/, /gpr/cgr/manage, ...) gets the rebuild status message
 server.createContext("/", exchange -> {
     String message;
 
@@ -168,9 +216,9 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
   echo "Rebuilding GeoPrism database..."
 
   java ${CATALINA_OPTS} \
-    -cp "${CATALINA_HOME}/webapps/ROOT/WEB-INF/classes:${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/*" \
+    -cp "${WEBAPP_DIR}/WEB-INF/classes:${WEBAPP_DIR}/WEB-INF/lib/*" \
     net.geoprism.build.GeoprismDatabaseBuilder \
-    "${CATALINA_HOME}/webapps/ROOT/WEB-INF/classes/metadata" \
+    "${WEBAPP_DIR}/WEB-INF/classes/metadata" \
     --rootUser="${POSTGRES_ROOT_USERNAME}" \
     --rootPass="${POSTGRES_ROOT_PASSWORD}" \
     --templateDb=postgres \

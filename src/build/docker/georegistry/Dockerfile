@@ -8,6 +8,13 @@ ENV CGR_VERSION=LATEST
 ENV LOG_LEVEL=error
 ENV POSTGRES_PORT=5432
 
+# CWBI - Support Arbitrary context paths
+ARG CONTEXT_NAME=ROOT
+ARG DEPLOY_ENV=
+ENV CONTEXT_NAME=$CONTEXT_NAME \
+    DEPLOY_ENV=$DEPLOY_ENV
+
+# CWBI - Rebuild database
 ARG REBUILD_DATABASE=false
 ENV REBUILD_DATABASE=${REBUILD_DATABASE}
 
@@ -18,11 +25,11 @@ COPY target/georegistry.war $CATALINA_HOME/wars/geoprism.war
 
 # Deploy CGR War
 RUN mkdir -p $CATALINA_HOME/wars/geoprism && cd $CATALINA_HOME/wars/geoprism && $JAVA_HOME/bin/jar xf $CATALINA_HOME/wars/geoprism.war
-RUN mv $CATALINA_HOME/wars/geoprism $CATALINA_HOME/webapps/ROOT
+RUN mv $CATALINA_HOME/wars/geoprism $CATALINA_HOME/webapps/$CONTEXT_NAME
 
 # Log4j properties
-RUN wget -nv -O $CATALINA_HOME/webapps/ROOT/WEB-INF/classes/log4j2.xml https://raw.githubusercontent.com/terraframe/geoprism-cloud/dev/ansible/roles/webserver/files/log4j2.xml
-RUN sed -i -e "s/<Root level=\"error\">/<Root level=\"$LOG_LEVEL\">/g" $CATALINA_HOME/webapps/ROOT/WEB-INF/classes/log4j2.xml
+RUN wget -nv -O $CATALINA_HOME/webapps/$CONTEXT_NAME/WEB-INF/classes/log4j2.xml https://raw.githubusercontent.com/terraframe/geoprism-cloud/dev/ansible/roles/webserver/files/log4j2.xml
+RUN sed -i -e "s/<Root level=\"error\">/<Root level=\"$LOG_LEVEL\">/g" $CATALINA_HOME/webapps/$CONTEXT_NAME/WEB-INF/classes/log4j2.xml
 
 # Pre-load with a default appcfg
 COPY target/appcfg $CATALINA_HOME/appcfg
