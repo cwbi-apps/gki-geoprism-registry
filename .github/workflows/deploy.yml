@@ -29,6 +29,7 @@ env:
   ECR_REPOSITORY: kaleidoscope-gki/geoprism-registry
   JAVA_VERSION: "17"
   DEPLOY_ENV: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+  CONTEXT_PATH: "/"
 
 permissions:
   id-token: write
@@ -127,12 +128,17 @@ jobs:
 
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY"
 
+          # '/gpr' -> 'gpr', '/' -> 'ROOT', '/a/b' -> 'a#b' (Tomcat webapp naming)
+          CONTEXT_DIR=$(echo "$CONTEXT_PATH" | sed -e 's|^/*||' -e 's|/*$||' -e 's|/|#|g')
+          CONTEXT_DIR=${CONTEXT_DIR:-ROOT}
+
           echo "Environment: $DEPLOY_ENV"
           echo "Commit:      $IMAGE_SHA"
           echo "Image:       $IMAGE"
+          echo "Context:     $CONTEXT_PATH (webapps/$CONTEXT_DIR)"
 
           docker build \
-            --build-arg CONTEXT_NAME=gpr \
+            --build-arg CONTEXT_NAME="$CONTEXT_DIR" \
             --build-arg DEPLOY_ENV="$DEPLOY_ENV" \
             --tag "$IMAGE:$DEPLOY_ENV" \
             --tag "$IMAGE:$IMAGE_SHA" \
