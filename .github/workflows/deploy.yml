@@ -29,7 +29,7 @@ env:
   ECR_REPOSITORY: kaleidoscope-gki/geoprism-registry
   JAVA_VERSION: "17"
   DEPLOY_ENV: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
-  CONTEXT_PATH: "/gpr"
+  CONTEXT_PATH: "/"
 
 permissions:
   id-token: write
