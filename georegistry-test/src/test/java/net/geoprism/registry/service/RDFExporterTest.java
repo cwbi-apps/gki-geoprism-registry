@@ -22,7 +22,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.google.gson.JsonObject;
@@ -119,8 +119,8 @@ public class RDFExporterTest extends FastDatasetTest implements InstanceTestClas
       writer.start();
       // writer.triple(Triple.create(NodeFactory.createURI("urn:usace:cambodia"),
       // NodeFactory.createURI("urn:usace:country#code"),
-      // NodeFactory.createLiteral("Cambodia")));
-      writer.quad(Quad.create(NodeFactory.createLiteral("LPG-code"), NodeFactory.createURI("urn:usace:cambodia"), NodeFactory.createURI("urn:usace:country#code"), NodeFactory.createLiteral("Cambodia")));
+      // NodeFactory.createLiteralString("Cambodia")));
+      writer.quad(Quad.create(NodeFactory.createLiteralString("LPG-code"), NodeFactory.createURI("urn:usace:cambodia"), NodeFactory.createURI("urn:usace:country#code"), NodeFactory.createLiteralString("Cambodia")));
       writer.finish();
 
       System.out.println(FileUtils.readFileToString(file.toFile(), "UTF-8"));
