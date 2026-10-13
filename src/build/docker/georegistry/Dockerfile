@@ -2,7 +2,10 @@
 #
 #
 
-FROM tomcat:11-jdk25
+# Pinned to Ubuntu 24.04 (noble): the default 11-jdk25 tag is now Ubuntu 26.04,
+# which ships an unpackaged /usr/bin/pebble Go binary with stdlib CVEs and
+# rust-coreutils, which scanners flag against GNU coreutils CVEs.
+FROM tomcat:11-jdk25-temurin-noble
 
 # Ubuntu 26.04 base images ship Canonical's pebble (Go binary, unused here, flagged for go/stdlib CVEs) - drop it
 # and pick up any pending OS security updates
