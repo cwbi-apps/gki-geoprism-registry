@@ -14,6 +14,7 @@ on:
         options:
           - dev
           - test
+          - prod
 
       ref:
         description: Git commit SHA, branch, or tag to deploy
@@ -96,6 +97,9 @@ jobs:
               ;;
             test)
               echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::276847049069:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
+              ;;
+            prod)
+              echo "AWS_ROLE_ARN=arn:aws-us-gov:iam::648157167324:role/github-actions-ecr-kaleidoscope-gki-geoprism-registry" >> "$GITHUB_ENV"
               ;;
             *)
               echo "Unsupported deployment environment: $DEPLOY_ENV"
