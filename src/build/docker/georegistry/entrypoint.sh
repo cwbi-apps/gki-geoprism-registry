@@ -81,6 +81,7 @@ CATALINA_OPTS="${CATALINA_OPTS} -Ddatabase.password=${DATABASE_PASSWORD}"
 CATALINA_OPTS="${CATALINA_OPTS} -Dgeoprism.origin=gki.cwbi.us"
 CATALINA_OPTS="${CATALINA_OPTS} -Dmapboxgl.accessToken=${MAPBOX_KEY:-}"
 CATALINA_OPTS="${CATALINA_OPTS} -Dgeoprism.remote.url=${GEOPRISM_REMOTE_URL}"
+CATALINA_OPTS="${CATALINA_OPTS} -Ddb.custom.support=true"
 
 export CATALINA_OPTS
 
