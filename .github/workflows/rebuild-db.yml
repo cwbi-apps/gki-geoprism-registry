@@ -17,6 +17,11 @@ on:
         required: true
         default: master
 
+      data_loader_version:
+        description: Version of the usace-spn-data-loader to load into the database
+        required: true
+        default: 0.0.1-SNAPSHOT
+
 concurrency:
   group: database-rebuild-${{ inputs.environment }}
   cancel-in-progress: false
@@ -81,6 +86,10 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+          # Generates a settings.xml 'cloudsmith' server entry for downloading the private data loader
+          server-id: cloudsmith
+          server-username: CLOUDSMITH_USERNAME
+          server-password: CLOUDSMITH_API_KEY
 
       - name: Build Maven project
         run: |
@@ -108,6 +117,33 @@ jobs:
 
           echo "Docker build context:"
           find "$DOCKER_CONTEXT/target" -maxdepth 2 -type f -print
+
+      - name: Download data loader
+        env:
+          CLOUDSMITH_USERNAME: ${{ secrets.CLOUDSMITH_USERNAME }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+          DATA_LOADER_VERSION: ${{ inputs.data_loader_version }}
+        run: |
+          set -euo pipefail
+
+          DB_BUILDER_DIR="src/build/docker/georegistry/target/db-builder"
+
+          rm -rf "$DB_BUILDER_DIR"
+          mkdir -p "$DB_BUILDER_DIR"
+
+          mvn -B -U \
+            -f src/build/shell/data-loader-download.pom.xml \
+            dependency:copy-dependencies \
+            -DdataLoaderVersion="$DATA_LOADER_VERSION" \
+            -DoutputDirectory="$PWD/$DB_BUILDER_DIR"
+
+          if ! ls "$DB_BUILDER_DIR"/usace-spn-data-loader-*.jar > /dev/null 2>&1; then
+            echo "ERROR: usace-spn-data-loader $DATA_LOADER_VERSION was not downloaded."
+            exit 1
+          fi
+
+          echo "Data loader:"
+          ls -la "$DB_BUILDER_DIR"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -170,6 +206,7 @@ jobs:
           echo "Commit:           $IMAGE_SHA"
           echo "Image:            $IMAGE"
           echo "Rebuild database: true"
+          echo "Data loader:      ${{ inputs.data_loader_version }}"
           echo "Context:     $CONTEXT_PATH (webapps/$CONTEXT_DIR)"
 
           docker build \

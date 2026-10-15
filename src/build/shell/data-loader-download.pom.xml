@@ -1,0 +1,52 @@
+<!--
+  Downloads the usace-spn-data-loader jar for the database rebuild image.
+
+  The jar is a thin jar: its dependencies are already provided by the georegistry war, so transitive
+  dependencies are excluded. The repository is private; credentials come from the 'cloudsmith' server
+  entry in settings.xml.
+
+  Usage:
+    mvn -B -f data-loader-download.pom.xml dependency:copy-dependencies \
+      -DdataLoaderVersion=0.0.1-SNAPSHOT -DoutputDirectory=<dir>
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>ai.terraframe.kaleidoscope</groupId>
+  <artifactId>data-loader-download</artifactId>
+  <version>0.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <properties>
+    <dataLoaderVersion>0.0.1-SNAPSHOT</dataLoaderVersion>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>cloudsmith</id>
+      <url>https://maven.cloudsmith.io/terraframe/usace-spn-data-builder/</url>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>ai.terraframe.kaleidoscope</groupId>
+      <artifactId>usace-spn-data-loader</artifactId>
+      <version>${dataLoaderVersion}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+  </dependencies>
+</project>

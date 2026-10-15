@@ -215,9 +215,11 @@ if [ "${REBUILD_DATABASE:-false}" = "true" ]; then
   echo "Exclusive database-use lock acquired."
   echo "No live GeoPrism instances are using the database."
   echo "Rebuilding GeoPrism database..."
+  echo "Additional database builder jars:"
+  ls -1 "${CATALINA_HOME}/db-builder" 2>/dev/null || true
 
   java ${CATALINA_OPTS} \
-    -cp "${WEBAPP_DIR}/WEB-INF/classes:${WEBAPP_DIR}/WEB-INF/lib/*" \
+    -cp "${WEBAPP_DIR}/WEB-INF/classes:${WEBAPP_DIR}/WEB-INF/lib/*:${CATALINA_HOME}/db-builder/*" \
     net.geoprism.build.GeoprismDatabaseBuilder \
     "${WEBAPP_DIR}/WEB-INF/classes/metadata" \
     --rootUser="${POSTGRES_ROOT_USERNAME}" \

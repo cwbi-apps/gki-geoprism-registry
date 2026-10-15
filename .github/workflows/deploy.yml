@@ -84,6 +84,9 @@ jobs:
             envcfg/prod \
             "$DOCKER_CONTEXT/target/appcfg"
 
+          # Only populated by the rebuild-db workflow, but must exist for the Dockerfile COPY
+          mkdir -p "$DOCKER_CONTEXT/target/db-builder"
+
           echo "Docker build context:"
           find "$DOCKER_CONTEXT/target" -maxdepth 2 -type f -print
 

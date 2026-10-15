@@ -44,6 +44,10 @@ RUN sed -i -e "s/<Root level=\"error\">/<Root level=\"$LOG_LEVEL\">/g" $CATALINA
 # Pre-load with a default appcfg
 COPY target/appcfg $CATALINA_HOME/appcfg
 
+# CWBI - Extra jars (e.g. the usace-spn-data-loader) added to the classpath only when rebuilding the database.
+# Kept out of WEB-INF/lib so they never load into the running webapp. Empty for a standard deploy.
+COPY target/db-builder/ $CATALINA_HOME/db-builder/
+
 ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh $CATALINA_HOME/bin/wait-for-it.sh
 RUN chmod +x $CATALINA_HOME/bin/wait-for-it.sh
 

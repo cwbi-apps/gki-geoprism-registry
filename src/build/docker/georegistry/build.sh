@@ -23,6 +23,7 @@ tag=${tag:-'latest'}
 mkdir target
 cp ../../../../georegistry-web/target/georegistry.war target/georegistry.war
 cp -R ../../../../envcfg/prod target/appcfg
+mkdir -p target/db-builder
 
 docker build -t terraframe/geoprism-registry:$tag .
 
