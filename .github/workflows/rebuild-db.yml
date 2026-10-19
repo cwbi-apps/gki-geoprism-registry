@@ -18,9 +18,9 @@ on:
         default: master
 
       data_loader_version:
-        description: Version of the usace-spn-data-loader to load into the database
-        required: true
-        default: 0.0.1-SNAPSHOT
+        description: Version of the usace-spn-data-loader to load into the database (leave blank to skip)
+        required: false
+        default: ""
 
 concurrency:
   group: database-rebuild-${{ inputs.environment }}
@@ -31,7 +31,7 @@ env:
   ECR_REPOSITORY: kaleidoscope-gki/geoprism-registry
   JAVA_VERSION: "25"
   DEPLOY_ENV: ${{ inputs.environment }}
-  CONTEXT_PATH: "/gpr"
+  CONTEXT_PATH: "/"
 
 permissions:
   id-token: write
@@ -131,6 +131,14 @@ jobs:
           rm -rf "$DB_BUILDER_DIR"
           mkdir -p "$DB_BUILDER_DIR"
 
+          # Trim whitespace; a blank version means the data loader is not used
+          DATA_LOADER_VERSION="$(echo "$DATA_LOADER_VERSION" | xargs)"
+
+          if [ -z "$DATA_LOADER_VERSION" ]; then
+            echo "No data loader version provided. Skipping usace-spn-data-loader."
+            exit 0
+          fi
+
           mvn -B -U \
             -f src/build/shell/data-loader-download.pom.xml \
             dependency:copy-dependencies \
@@ -192,6 +200,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_SHA: ${{ steps.git.outputs.sha }}
+          DATA_LOADER_VERSION: ${{ inputs.data_loader_version }}
         working-directory: src/build/docker/georegistry
         run: |
           set -euo pipefail
@@ -206,7 +215,7 @@ jobs:
           echo "Commit:           $IMAGE_SHA"
           echo "Image:            $IMAGE"
           echo "Rebuild database: true"
-          echo "Data loader:      ${{ inputs.data_loader_version }}"
+          echo "Data loader:      ${DATA_LOADER_VERSION:-none}"
           echo "Context:     $CONTEXT_PATH (webapps/$CONTEXT_DIR)"
 
           docker build \
