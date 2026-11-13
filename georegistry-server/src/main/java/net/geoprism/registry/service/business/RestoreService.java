@@ -28,21 +28,35 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.commongeoregistry.adapter.RegistryAdapter;
 import org.commongeoregistry.adapter.dataaccess.GeoObjectOverTime;
+import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
+import org.commongeoregistry.adapter.metadata.OrganizationDTO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonReader;
+import com.runwaysdk.business.SmartException;
 import com.runwaysdk.dataaccess.MdAttributeBooleanDAOIF;
 import com.runwaysdk.dataaccess.MdAttributeCharacterDAOIF;
 import com.runwaysdk.dataaccess.MdAttributeConcreteDAOIF;
@@ -54,27 +68,40 @@ import com.runwaysdk.dataaccess.MdAttributeTextDAOIF;
 import com.runwaysdk.dataaccess.ProgrammingErrorException;
 import com.runwaysdk.dataaccess.transaction.Transaction;
 import com.runwaysdk.resource.FileResource;
+import com.runwaysdk.resource.StreamResource;
 import com.runwaysdk.session.Session;
 
+import net.geoprism.GenericException;
+import net.geoprism.GeoprismUser;
 import net.geoprism.ontology.Classifier;
 import net.geoprism.registry.GeoRegistryUtil;
 import net.geoprism.registry.ListType;
+import net.geoprism.registry.RegistryConstants;
+import net.geoprism.registry.UserInfo;
 import net.geoprism.registry.cache.Cache;
 import net.geoprism.registry.cache.LRUCache;
 import net.geoprism.registry.etl.BusinessEdgeJsonImporter;
 import net.geoprism.registry.etl.EdgeJsonImporter;
+import net.geoprism.registry.graph.BusinessEdgeType;
 import net.geoprism.registry.graph.BusinessType;
+import net.geoprism.registry.graph.DirectedAcyclicGraphType;
+import net.geoprism.registry.graph.UndirectedGraphType;
 import net.geoprism.registry.graph.transition.TransitionEvent;
 import net.geoprism.registry.model.BusinessObject;
+import net.geoprism.registry.model.ServerElement;
 import net.geoprism.registry.model.ServerGeoObjectIF;
 import net.geoprism.registry.model.ServerGeoObjectType;
 import net.geoprism.registry.model.ServerHierarchyType;
 import net.geoprism.registry.model.ServerOrganization;
 import net.geoprism.registry.service.request.SerializedListTypeCache;
+import net.geoprism.registry.view.RestoreSummary;
+import net.geoprism.registry.xml.XMLImporter;
 
 @Service
 public class RestoreService implements RestoreServiceIF
 {
+  private static final Logger logger = LoggerFactory.getLogger(RestoreService.class);
+
   @Autowired
   private BusinessObjectBusinessServiceIF   bObjectService;
 
@@ -93,19 +120,37 @@ public class RestoreService implements RestoreServiceIF
   @Autowired
   private GraphRepoServiceIF                repoService;
 
-  @Override
-  public void restoreFromBackup(InputStream istream)
+  @Autowired
+  private OrganizationBusinessServiceIF     orgService;
+
+  @Autowired
+  private CacheProviderIF                   cacheProvider;
+
+  @FunctionalInterface
+  private interface RestoreStep
   {
+    void run() throws IOException;
+  }
+
+  @Override
+  public RestoreSummary restoreFromBackup(InputStream istream)
+  {
+    RestoreSummary summary = new RestoreSummary();
+
     try
     {
       File directory = Files.createTempDirectory("gpr-restore").toFile();
 
       try
       {
-        unzipFileToFolder(istream, directory);
+        runStep("extracting the backup file", () -> unzipFileToFolder(istream, directory));
+
+        // 0) Restore the organizations, types are only restored for existing
+        // organizations
+        runStep("restoring organizations", () -> restoreOrganizations(directory, summary));
 
         // 1) Restore the metadata
-        restoreMetadata(directory);
+        runStep("restoring metadata", () -> restoreMetadata(directory, summary));
 
         // 2) Refresh permission
         if (Session.getCurrentSession() != null)
@@ -113,29 +158,32 @@ public class RestoreService implements RestoreServiceIF
           ( (Session) Session.getCurrentSession() ).reloadPermissions();
         }
 
-        // 3) Import the geo object instance data
-        restoreGeoObjectData(directory);
+        // 3) Restore the users and their roles
+        runStep("restoring users", () -> restoreUserData(directory, summary));
 
-        // 4) Import the hierarchy edges between geo objects
-        restoreHierarchyData(directory);
+        // 4) Import the geo object instance data
+        runStep("restoring geo objects", () -> restoreGeoObjectData(directory, summary));
 
-        // 5) Import DAG edges between geo objects
-        restoreDagData(directory);
+        // 5) Import the hierarchy edges between geo objects
+        runStep("restoring hierarchy relationships", () -> restoreHierarchyData(directory, summary));
 
-        // 6) Import Undirected Graph edges between geo objects
-        restoreUndirectedGraphData(directory);
+        // 6) Import DAG edges between geo objects
+        runStep("restoring directed acyclic graph relationships", () -> restoreDagData(directory, summary));
 
-        // 7) Restore the business objects
-        restoreBusinessObjectData(directory);
+        // 7) Import Undirected Graph edges between geo objects
+        runStep("restoring undirected graph relationships", () -> restoreUndirectedGraphData(directory, summary));
 
-        // 8) Restore the business edges
-        restoreBusinessEdges(directory);
+        // 8) Restore the business objects
+        runStep("restoring business objects", () -> restoreBusinessObjectData(directory, summary));
+
+        // 9) Restore the business edges
+        runStep("restoring business relationships", () -> restoreBusinessEdges(directory, summary));
 
         // 10) Restore transition events
-        restoreTransitionEvents(directory);
+        runStep("restoring transition events", () -> restoreTransitionEvents(directory, summary));
 
         // 11) Restore List Type definition
-        restoreListTypeData(directory);
+        runStep("restoring list types", () -> restoreListTypeData(directory, summary));
       }
       finally
       {
@@ -146,10 +194,46 @@ public class RestoreService implements RestoreServiceIF
     {
       throw new ProgrammingErrorException(e);
     }
+
+    return summary;
+  }
+
+  /**
+   * Runs a step of the restore. Only an SRA can run a restore, so errors which
+   * don't already have a user friendly message are re-thrown with the step and
+   * the root cause, instead of surfacing as an "unspecified error" in the UI.
+   * The full stack trace is logged.
+   */
+  private void runStep(String step, RestoreStep runnable)
+  {
+    try
+    {
+      runnable.run();
+    }
+    catch (SmartException e)
+    {
+      // Already has a localized message
+      throw e;
+    }
+    catch (IOException | RuntimeException e)
+    {
+      logger.error("Restore failed while " + step, e);
+
+      Throwable root = e;
+
+      while (root.getCause() != null && root.getCause() != root)
+      {
+        root = root.getCause();
+      }
+
+      String message = root.getMessage() != null ? root.getMessage() : "";
+
+      throw new GenericException("The restore failed while " + step + ": " + root.getClass().getSimpleName() + ": " + message + " (see the server log for the full stack trace)", e);
+    }
   }
 
   @Transaction
-  protected void restoreMetadata(File directory) throws IOException
+  protected void restoreMetadata(File directory, RestoreSummary summary) throws IOException
   {
     File subdir = new File(directory, "metadata");
 
@@ -159,16 +243,15 @@ public class RestoreService implements RestoreServiceIF
     {
       List<ServerOrganization> organizations = ServerOrganization.getOrganizations();
 
-      JsonArray orgCodes = organizations.stream().map(org -> org.getCode()).collect(() -> new JsonArray(), (array, element) -> array.add(element), (listA, listB) -> {
-      });
-
       for (File file : files)
       {
         try (FileResource resource = new FileResource(file))
         {
           try (InputStream istream = resource.openNewStream())
           {
-            GeoRegistryUtil.importTypes(orgCodes.toString(), istream);
+            List<ServerElement> elements = new XMLImporter(false).importXMLDefinitions(new StreamResource(istream, "domain.xml"), organizations);
+
+            elements.forEach(element -> summary.increment(getMetadataLabel(element)));
 
             this.repoService.refreshMetadataCache();
 
@@ -179,7 +262,165 @@ public class RestoreService implements RestoreServiceIF
     }
   }
 
-  protected void restoreGeoObjectData(File directory) throws IOException
+  private String getMetadataLabel(ServerElement element)
+  {
+    if (element instanceof ServerGeoObjectType)
+    {
+      return "Geo object types";
+    }
+    else if (element instanceof ServerHierarchyType)
+    {
+      return "Hierarchies";
+    }
+    else if (element instanceof BusinessType)
+    {
+      return "Business types";
+    }
+    else if (element instanceof BusinessEdgeType)
+    {
+      return "Business edge types";
+    }
+    else if (element instanceof DirectedAcyclicGraphType)
+    {
+      return "Directed acyclic graph types";
+    }
+    else if (element instanceof UndirectedGraphType)
+    {
+      return "Undirected graph types";
+    }
+
+    return element.getClass().getSimpleName();
+  }
+
+  protected void restoreOrganizations(File directory, RestoreSummary summary) throws IOException
+  {
+    File file = new File(new File(directory, "organizations"), "organizations.json");
+
+    if (file.exists())
+    {
+      try (FileReader reader = new FileReader(file))
+      {
+        JsonArray organizations = JsonParser.parseReader(reader).getAsJsonArray();
+
+        this.orgService.importJsonTree(organizations);
+
+        summary.add("Organizations", countOrganizations(organizations));
+      }
+    }
+    else
+    {
+      // Backups made before organizations were included only have the
+      // organization codes in the metadata. Create any missing organizations so
+      // that their types and data can be restored.
+      summary.add("Organizations", createMissingOrganizationsFromMetadata(new File(new File(directory, "metadata"), "metadata.xml")));
+    }
+
+    this.cacheProvider.getServerCache().refresh();
+  }
+
+  private long countOrganizations(JsonArray organizations)
+  {
+    long count = 0;
+
+    for (int i = 0; i < organizations.size(); i++)
+    {
+      JsonObject organization = organizations.get(i).getAsJsonObject();
+
+      count += 1 + countOrganizations(organization.get("children").getAsJsonArray());
+    }
+
+    return count;
+  }
+
+  /**
+   * @return the number of organizations created
+   */
+  @Transaction
+  protected long createMissingOrganizationsFromMetadata(File metadata) throws IOException
+  {
+    long count = 0;
+
+    if (!metadata.exists())
+    {
+      return count;
+    }
+
+    try
+    {
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+      factory.setXIncludeAware(false);
+      factory.setExpandEntityReferences(false);
+
+      Document document = factory.newDocumentBuilder().parse(metadata);
+      NodeList nodes = document.getElementsByTagName("organization");
+
+      for (int i = 0; i < nodes.getLength(); i++)
+      {
+        String code = ( (Element) nodes.item(i) ).getAttribute("code");
+
+        if (code.length() > 0 && ServerOrganization.getByCode(code, false) == null)
+        {
+          logger.warn("Creating organization [" + code + "] from the backup metadata. Its label will be the same as its code.");
+
+          OrganizationDTO dto = new OrganizationDTO(code, new LocalizedValue(code), new LocalizedValue(""));
+          dto.setEnabled(true);
+
+          this.orgService.create(dto);
+
+          count++;
+        }
+      }
+    }
+    catch (ParserConfigurationException | SAXException e)
+    {
+      throw new ProgrammingErrorException(e);
+    }
+
+    return count;
+  }
+
+  protected void restoreUserData(File directory, RestoreSummary summary) throws IOException
+  {
+    File file = new File(new File(directory, "users"), "users.json");
+
+    if (file.exists())
+    {
+      // Don't overwrite the built-in admin or the user running the restore
+      String currentUsername = Session.getCurrentSession() != null ? Session.getCurrentSession().getUser().getSingleActorName() : null;
+
+      try (JsonReader reader = new JsonReader(new FileReader(file)))
+      {
+        reader.setLenient(true);
+
+        Gson gson = new GsonBuilder().create();
+
+        reader.beginArray();
+
+        while (reader.hasNext())
+        {
+          JsonObject jObject = gson.fromJson(reader, JsonObject.class);
+
+          String username = jObject.get(GeoprismUser.USERNAME).getAsString();
+
+          if (!username.equals(RegistryConstants.ADMIN_USER_NAME) && !username.equals(currentUsername))
+          {
+            UserInfo.restoreFromBackup(jObject);
+
+            summary.increment("Users");
+          }
+          else
+          {
+            summary.increment("Users skipped (admin or the current user)");
+          }
+        }
+
+        reader.endArray();
+      }
+    }
+  }
+
+  protected void restoreGeoObjectData(File directory, RestoreSummary summary) throws IOException
   {
     RegistryAdapter adapter = ServiceFactory.getAdapter();
     File data = new File(directory, "geo-objects");
@@ -191,6 +432,13 @@ public class RestoreService implements RestoreServiceIF
 
       for (File file : files)
       {
+        String typeCode = FilenameUtils.getBaseName(file.getName());
+
+        if (!adapter.getMetadataCache().getGeoObjectType(typeCode).isPresent())
+        {
+          throw new GenericException("The geo object type [" + typeCode + "] in the backup does not exist on this server. Check that its organization exists and that the metadata was restored.");
+        }
+
         try (FileResource resource = new FileResource(file))
         {
           try (JsonReader reader = new JsonReader(new FileReader(file)))
@@ -205,9 +453,15 @@ public class RestoreService implements RestoreServiceIF
             {
               JsonObject jObject = gson.fromJson(reader, JsonObject.class);
 
+              // Backups made before the "present" date was changed to
+              // 4710-12-31 contain end dates of 5000-12-31
+              GeoRegistryUtil.clampEndDates(jObject);
+
               GeoObjectOverTime object = GeoObjectOverTime.fromJSON(adapter, jObject.toString());
 
               this.gObjectService.apply(object, true, true, false);
+
+              summary.increment("Geo objects");
             }
 
             reader.endArray();
@@ -217,7 +471,7 @@ public class RestoreService implements RestoreServiceIF
     }
   }
 
-  protected void restoreHierarchyData(File directory) throws IOException
+  protected void restoreHierarchyData(File directory, RestoreSummary summary) throws IOException
   {
     File data = new File(directory, "hierarchies");
 
@@ -253,7 +507,7 @@ public class RestoreService implements RestoreServiceIF
               String childUid = jObject.get("childUid").getAsString();
               String childTypeCode = jObject.get("childType").getAsString();
               Date startDate = GeoRegistryUtil.parseDate(jObject.get("startDate").getAsString());
-              Date endDate = GeoRegistryUtil.parseDate(jObject.get("endDate").getAsString());
+              Date endDate = GeoRegistryUtil.clampEndDate(GeoRegistryUtil.parseDate(jObject.get("endDate").getAsString()));
               String uid = jObject.get("uid").getAsString();
 
               ServerGeoObjectType parentType = ServerGeoObjectType.get(parentTypeCode);
@@ -276,6 +530,8 @@ public class RestoreService implements RestoreServiceIF
               });
 
               this.gObjectService.addChild(parent, child, hierarchy, startDate, endDate, uid, null, false);
+
+              summary.increment("Hierarchy relationships");
             }
 
             reader.endArray();
@@ -285,17 +541,17 @@ public class RestoreService implements RestoreServiceIF
     }
   }
 
-  protected void restoreDagData(File directory) throws IOException
+  protected void restoreDagData(File directory, RestoreSummary summary) throws IOException
   {
-    restoreGraphEdges(new File(directory, "dags"));
+    restoreGraphEdges(new File(directory, "dags"), "Directed acyclic graph relationships", summary);
   }
 
-  protected void restoreUndirectedGraphData(File directory) throws IOException
+  protected void restoreUndirectedGraphData(File directory, RestoreSummary summary) throws IOException
   {
-    restoreGraphEdges(new File(directory, "undirected-graphs"));
+    restoreGraphEdges(new File(directory, "undirected-graphs"), "Undirected graph relationships", summary);
   }
 
-  protected void restoreGraphEdges(File data) throws IOException
+  protected void restoreGraphEdges(File data, String label, RestoreSummary summary) throws IOException
   {
     File[] files = data.listFiles();
 
@@ -308,12 +564,14 @@ public class RestoreService implements RestoreServiceIF
         {
           EdgeJsonImporter importer = new EdgeJsonImporter(resource, null, null, null, false);
           importer.importData();
+
+          summary.add(label, importer.getCount());
         }
       }
     }
   }
 
-  protected void restoreBusinessObjectData(File directory) throws IOException
+  protected void restoreBusinessObjectData(File directory, RestoreSummary summary) throws IOException
   {
     File subdir = new File(directory, "business-objects");
 
@@ -392,6 +650,8 @@ public class RestoreService implements RestoreServiceIF
               }
 
               this.bObjectService.apply(object);
+
+              summary.increment("Business objects");
             }
 
             reader.endArray();
@@ -401,7 +661,7 @@ public class RestoreService implements RestoreServiceIF
     }
   }
 
-  protected void restoreBusinessEdges(File directory) throws IOException
+  protected void restoreBusinessEdges(File directory, RestoreSummary summary) throws IOException
   {
     File subdir = new File(directory, "business-edges");
     File[] files = subdir.listFiles();
@@ -414,12 +674,14 @@ public class RestoreService implements RestoreServiceIF
         {
           BusinessEdgeJsonImporter importer = new BusinessEdgeJsonImporter(resource, null, false);
           importer.importData();
+
+          summary.add("Business relationships", importer.getCount());
         }
       }
     }
   }
 
-  protected void restoreTransitionEvents(File directory) throws IOException
+  protected void restoreTransitionEvents(File directory, RestoreSummary summary) throws IOException
   {
     File data = new File(directory, "events");
 
@@ -443,6 +705,8 @@ public class RestoreService implements RestoreServiceIF
             jObject.remove(TransitionEvent.OID);
 
             this.teService.apply(jObject);
+
+            summary.increment("Transition events");
           }
 
           reader.endArray();
@@ -451,7 +715,7 @@ public class RestoreService implements RestoreServiceIF
     }
   }
 
-  private void restoreListTypeData(File directory) throws IOException
+  private void restoreListTypeData(File directory, RestoreSummary summary) throws IOException
   {
     File subdirectory = new File(directory, "list-type");
     subdirectory.mkdirs();
@@ -472,6 +736,8 @@ public class RestoreService implements RestoreServiceIF
             jObject.remove(ListType.OID);
 
             ListType.apply(jObject);
+
+            summary.increment("List types");
           }
         }
       }

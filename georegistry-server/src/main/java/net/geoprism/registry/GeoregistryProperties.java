@@ -36,7 +36,7 @@ public class GeoregistryProperties
   {
     private static GeoregistryProperties INSTANCE = new GeoregistryProperties();
   }
-  
+
   private String mapBounds = null;
 
   public GeoregistryProperties()
@@ -55,12 +55,11 @@ public class GeoregistryProperties
 
     return token;
   }
-  
+
   public static Boolean isLabeledPropertyGraphEnabled()
   {
     return Singleton.INSTANCE.props.getBoolean("enable.labeled.property.graph", true);
   }
-
 
   public static Boolean isBusinessDataEnabled()
   {
@@ -73,17 +72,17 @@ public class GeoregistryProperties
 
     return font;
   }
-  
+
   public static Boolean isSearchEnabled()
   {
     return Singleton.INSTANCE.props.getBoolean("cgr.search.enabled", true);
   }
-  
+
   public static Boolean isGraphVisualizerEnabled()
   {
     return Singleton.INSTANCE.props.getBoolean("cgr.graph.visualizer.enabled", true);
   }
-  
+
   public static List<String> getCorsWhitelist()
   {
     String whitelist = Singleton.INSTANCE.props.getString("cgr.cors.whitelist", "");
@@ -95,39 +94,49 @@ public class GeoregistryProperties
 
     return Arrays.asList(whitelist.split(","));
   }
-  
+
   public static String getMapboxglAccessToken()
   {
     return Singleton.INSTANCE.props.getString("mapboxgl.accessToken");
   }
-  
+
   /**
-   * Can be used to provide the default map bounds for all map activities such as the location manager.
-   * This parameter should be specified as a <a href="https://docs.mapbox.com/mapbox-gl-js/api/geography/#lnglatboundslike">LngLatBoundsLike</a>
-   * as it will be fed directly to the bounds parameter of the <a href="https://docs.mapbox.com/mapbox-gl-js/api/map/">Mapbox constructor</a>.
+   * Can be used to provide the default map bounds for all map activities such
+   * as the location manager. This parameter should be specified as a <a href=
+   * "https://docs.mapbox.com/mapbox-gl-js/api/geography/#lnglatboundslike">LngLatBoundsLike</a>
+   * as it will be fed directly to the bounds parameter of the
+   * <a href="https://docs.mapbox.com/mapbox-gl-js/api/map/">Mapbox
+   * constructor</a>.
    * 
-   * @see <a href="https://docs.mapbox.com/playground/geocoding/">Create your own bounds here</a>
+   * @see <a href="https://docs.mapbox.com/playground/geocoding/">Create your
+   *      own bounds here</a>
    */
   public synchronized static String getDefaultMapBounds()
   {
     if (Singleton.INSTANCE.mapBounds == null)
     {
-      String sBounds = Singleton.INSTANCE.props.getString("cgr.map.bounds", "[[-108.9497822,40.919108654],[-102.02574403,37.14964020]]"); // Default is Colorado, the headquarters of TerraFrame!
-      
+      String sBounds = Singleton.INSTANCE.props.getString("cgr.map.bounds", "[[-108.9497822,40.919108654],[-102.02574403,37.14964020]]"); // Default
+                                                                                                                                          // is
+                                                                                                                                          // Colorado,
+                                                                                                                                          // the
+                                                                                                                                          // headquarters
+                                                                                                                                          // of
+                                                                                                                                          // TerraFrame!
+
       JsonArray jaBounds = JsonParser.parseString(sBounds).getAsJsonArray();
-      
+
       if (jaBounds.size() != 2)
       {
         throw new ConfigurationException("cgr.map.bounds must contain an array of two arrays.");
       }
-      
+
       for (int i = 0; i < jaBounds.size(); ++i)
       {
         JsonArray lngLatLike = jaBounds.get(i).getAsJsonArray();
-        
+
         Float lat = Float.parseFloat(lngLatLike.get(1).getAsString().trim());
         Float lng = Float.parseFloat(lngLatLike.get(0).getAsString().trim());
-        
+
         if (lat > 90 || lat < -90)
         {
           throw new ConfigurationException("Latitude must be greater than -90 and less than 90.");
@@ -137,12 +146,11 @@ public class GeoregistryProperties
           throw new ConfigurationException("Longitude be greater than -180 and less than 180.");
         }
       }
-      
+
       Singleton.INSTANCE.mapBounds = sBounds;
     }
-    
+
     return Singleton.INSTANCE.mapBounds;
   }
-
 
 }

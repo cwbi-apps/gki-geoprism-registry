@@ -23,7 +23,7 @@ Geoprism Registry(tm). If not, see <http://www.gnu.org/licenses/>. -->
   <parent>
     <groupId>net.geoprism</groupId>
     <artifactId>georegistry</artifactId>
-    <version>2.0.1-SNAPSHOT</version>
+    <version>2.0.3-SNAPSHOT</version>
   </parent>
   <artifactId>georegistry-test</artifactId>
   <packaging>war</packaging>
@@ -416,9 +416,6 @@ Geoprism Registry(tm). If not, see <http://www.gnu.org/licenses/>. -->
           <source>${maven.compiler.source}</source>
           <target>${maven.compiler.target}</target>
           <complianceLevel>${maven.compiler.target}</complianceLevel>
-          <fork>true</fork>
-          <meminitial>512m</meminitial>
-          <maxmem>1024m</maxmem>
         </configuration>
       </plugin>
 

@@ -47,9 +47,12 @@ import com.runwaysdk.query.OIterator;
 import com.runwaysdk.query.QueryFactory;
 import com.runwaysdk.system.metadata.MdEdge;
 
+import net.geoprism.GeoprismUser;
+import net.geoprism.GeoprismUserQuery;
 import net.geoprism.registry.GeoRegistryUtil;
 import net.geoprism.registry.ListType;
 import net.geoprism.registry.ListTypeQuery;
+import net.geoprism.registry.UserInfo;
 import net.geoprism.registry.graph.BusinessEdgeType;
 import net.geoprism.registry.graph.BusinessType;
 import net.geoprism.registry.graph.DirectedAcyclicGraphType;
@@ -90,6 +93,9 @@ public class BackupService implements BackupServiceIF
   @Autowired
   private DirectedAcyclicGraphTypeBusinessServiceIF dagService;
 
+  @Autowired
+  private OrganizationBusinessServiceIF             orgService;
+
   @Override
   public void createBackup(File zipfile)
   {
@@ -99,6 +105,8 @@ public class BackupService implements BackupServiceIF
 
       try
       {
+        exportOrganizations(directory);
+
         exportMetadata(directory);
 
         exportGeoObjectData(directory);
@@ -117,6 +125,8 @@ public class BackupService implements BackupServiceIF
 
         exportListTypeData(directory);
 
+        exportUserData(directory);
+
         GeoRegistryUtil.zipDirectory(directory, zipfile);
       }
       finally
@@ -129,6 +139,45 @@ public class BackupService implements BackupServiceIF
       throw new ProgrammingErrorException(e);
     }
 
+  }
+
+  private void exportOrganizations(File directory) throws IOException
+  {
+    File subdirectory = new File(directory, "organizations");
+    subdirectory.mkdirs();
+
+    try (JsonWriter writer = new JsonWriter(new FileWriter(new File(subdirectory, "organizations.json"))))
+    {
+      Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+      gson.toJson(this.orgService.exportToJson(), writer);
+    }
+  }
+
+  private void exportUserData(File directory) throws IOException
+  {
+    File subdirectory = new File(directory, "users");
+    subdirectory.mkdirs();
+
+    GeoprismUserQuery query = new GeoprismUserQuery(new QueryFactory());
+    query.ORDER_BY_ASC(query.getUsername());
+
+    try (JsonWriter writer = new JsonWriter(new FileWriter(new File(subdirectory, "users.json"))))
+    {
+      Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+      writer.beginArray();
+
+      try (OIterator<? extends GeoprismUser> it = query.getIterator())
+      {
+        while (it.hasNext())
+        {
+          gson.toJson(UserInfo.toBackupJSON(it.next()), writer);
+        }
+      }
+
+      writer.endArray();
+    }
   }
 
   private void exportListTypeData(File directory) throws IOException
@@ -303,7 +352,7 @@ public class BackupService implements BackupServiceIF
       while (skip < count)
       {
         StringBuilder statement = new StringBuilder();
-        statement.append("SELECT out.uid AS parentUid, out.@class AS parentClass, in.uid AS childUid, in.@class AS childClass, startDate AS startDate, endDate AS endDate");
+        statement.append("SELECT uid AS uid, out.uid AS parentUid, out.@class AS parentClass, in.uid AS childUid, in.@class AS childClass, startDate AS startDate, endDate AS endDate");
         statement.append(" FROM " + type.getMdEdgeDAO().getDBClassName());
         statement.append(" ORDER BY out.@rid, in.@rid");
         statement.append(" SKIP " + skip);
@@ -314,6 +363,7 @@ public class BackupService implements BackupServiceIF
 
         for (Map<String, Object> result : results)
         {
+          String uid = (String) result.get("uid");
           String parentUid = (String) result.get("parentUid");
           String parentClass = (String) result.get("parentClass");
           String childUid = (String) result.get("childUid");
@@ -328,6 +378,7 @@ public class BackupService implements BackupServiceIF
           ServerGeoObjectType childType = ServerGeoObjectType.get(childVertex);
 
           JsonObject object = new JsonObject();
+          object.addProperty("uid", uid);
           object.addProperty("parentUid", parentUid);
           object.addProperty("parentType", parentType.getCode());
           object.addProperty("childUid", childUid);
@@ -529,6 +580,13 @@ public class BackupService implements BackupServiceIF
     }
   }
 
+  private String getGeoObjectTypeCode(String dbClassName)
+  {
+    MdVertexDAOIF mdVertex = (MdVertexDAOIF) ObjectCache.getMdClassByTableName(dbClassName);
+
+    return ServerGeoObjectType.get(mdVertex).getCode();
+  }
+
   protected void exportBusinessEdgeData(File directory, BusinessEdgeType type) throws IOException
   {
     try (JsonWriter writer = new JsonWriter(new FileWriter(new File(directory, type.getCode() + ".json"))))
@@ -562,8 +620,9 @@ public class BackupService implements BackupServiceIF
       while (skip < count)
       {
         StringBuilder statement = new StringBuilder();
-        statement.append("SELECT out.code AS sourceCode, in.code AS targetCode");
+        statement.append("SELECT uid AS uid, out.code AS sourceCode, out.@class AS sourceClass, in.code AS targetCode, in.@class AS targetClass, startDate AS startDate, endDate AS endDate");
         statement.append(" FROM " + mdEdge.getDbClassName());
+        statement.append(" ORDER BY out.@rid, in.@rid");
         statement.append(" SKIP " + skip);
         statement.append(" LIMIT " + pageSize);
 
@@ -574,10 +633,27 @@ public class BackupService implements BackupServiceIF
         {
           String sourceCode = (String) result.get("sourceCode");
           String targetCode = (String) result.get("targetCode");
+          Date startDate = (Date) result.get("startDate");
+          Date endDate = (Date) result.get("endDate");
 
           JsonObject object = new JsonObject();
+          object.addProperty("uid", (String) result.get("uid"));
           object.addProperty("source", sourceCode);
           object.addProperty("target", targetCode);
+          object.addProperty("startDate", GeoRegistryUtil.formatDate(startDate, false));
+          object.addProperty("endDate", GeoRegistryUtil.formatDate(endDate, false));
+
+          // The edge type doesn't define which geo object type a geo object
+          // end belongs to, so it is recorded per edge
+          if (type.getIsParentGeoObject())
+          {
+            object.addProperty("sourceType", getGeoObjectTypeCode((String) result.get("sourceClass")));
+          }
+
+          if (type.getIsChildGeoObject())
+          {
+            object.addProperty("targetType", getGeoObjectTypeCode((String) result.get("targetClass")));
+          }
 
           gson.toJson(object, writer);
         }

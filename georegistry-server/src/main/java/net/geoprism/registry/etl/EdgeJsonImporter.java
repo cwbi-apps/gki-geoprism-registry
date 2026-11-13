@@ -84,6 +84,16 @@ public class EdgeJsonImporter
     this.service = ServiceFactory.getBean(EdgeTypeBusinessServiceIF.class);
   }
 
+  private long count = 0;
+
+  /**
+   * @return the number of edges imported by {@link #importData()}
+   */
+  public long getCount()
+  {
+    return this.count;
+  }
+
   public void importData() throws JsonSyntaxException, IOException
   {
     try (InputStream stream = resource.openNewStream())
@@ -115,13 +125,15 @@ public class EdgeJsonImporter
           String targetCode = joEdge.get("target").getAsString();
           TypeInfo targetType = new TypeInfo(TypeClass.GEO_OBJECT_TYPE, joEdge.get("targetType").getAsString());
           Date startDate = joEdge.has("startDate") ? GeoRegistryUtil.parseDate(joEdge.get("startDate").getAsString()) : this.startDate;
-          Date endDate = joEdge.has("endDate") ? GeoRegistryUtil.parseDate(joEdge.get("endDate").getAsString()) : this.endDate;
+          Date endDate = GeoRegistryUtil.clampEndDate(joEdge.has("endDate") ? GeoRegistryUtil.parseDate(joEdge.get("endDate").getAsString()) : this.endDate);
 
           // UID
 
-          GeoObjectApplyEdgeEvent event = new GeoObjectApplyEdgeEvent(sourceCode, sourceType, graphType.getTypeInfo(), targetCode, targetType, startDate, endDate, source.getCode(), ImportStrategy.NEW_ONLY, validate);
+          GeoObjectApplyEdgeEvent event = new GeoObjectApplyEdgeEvent(sourceCode, sourceType, graphType.getTypeInfo(), targetCode, targetType, startDate, endDate, source != null ? source.getCode() : null, ImportStrategy.NEW_ONLY, validate);
 
           this.gateway.publish(GenericEventMessage.asEventMessage(event));
+
+          this.count++;
 
           if (j % 500 == 0)
           {
