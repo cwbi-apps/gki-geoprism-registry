@@ -55,24 +55,24 @@ import { ConceptObjectService } from '@registry/service/concept-object.service';
   ],
 })
 export class CreateGeoObjectTypeComponent implements OnInit {
-  @Input() organization: Organization = null;
+  @Input() organization: Organization | null = null;
   @Input() parents: GeoObjectType[] = [];
-  @Input() groupSuperType: GeoObjectType = null;
+  @Input() groupSuperType: GeoObjectType | null = null;
   @Input() isAbstract: boolean;
 
   @Output() onCancel: EventEmitter<void> = new EventEmitter<void>();
   @Output() onError: EventEmitter<HttpErrorResponse> = new EventEmitter<HttpErrorResponse>();
   @Output() typeChange: EventEmitter<GeoObjectType> = new EventEmitter<GeoObjectType>();
 
-  geoObjectType: GeoObjectType = null;
+  geoObjectType: GeoObjectType | null = null;
 
   organizationLabel: string;
 
   sets: ConceptSet[] = [];
-  currentSet: ConceptSet = null;
+  currentSet: ConceptSet | null = null;
 
-  typeahead: Observable<ObjectAtTime[]> = null;
-  text: string;
+  typeahead: Observable<ObjectAtTime[]> | null = null;
+  text: string = '';
   loading: boolean;
 
   // eslint-disable-next-line no-useless-constructor
@@ -178,9 +178,9 @@ export class CreateGeoObjectTypeComponent implements OnInit {
   typeaheadOnSelect(match: TypeaheadMatch): void {
     if (match != null) {
       const item: ObjectOverTime = match.item;
-      this.text = item.code;
 
       if (this.geoObjectType.classification.rootTerm == null) {
+        this.text = item.code;
         this.geoObjectType.classification.rootTerm = item.code;
       }
     } else if (this.geoObjectType.classification.rootTerm != null) {

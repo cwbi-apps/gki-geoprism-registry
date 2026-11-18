@@ -33,7 +33,6 @@ import org.axonframework.eventhandling.GenericEventMessage;
 import org.axonframework.eventhandling.gateway.EventGateway;
 import org.commongeoregistry.adapter.constants.DefaultAttribute;
 import org.commongeoregistry.adapter.dataaccess.GeoObject;
-import org.commongeoregistry.adapter.dataaccess.UnknownTermException;
 import org.json.JSONObject;
 
 import com.google.gson.JsonObject;
@@ -41,10 +40,7 @@ import com.google.gson.JsonParser;
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException;
 import com.runwaysdk.ProblemException;
 import com.runwaysdk.ProblemIF;
-import com.runwaysdk.business.graph.VertexObject;
 import com.runwaysdk.dataaccess.DuplicateDataException;
-import com.runwaysdk.dataaccess.MdAttributeClassificationDAOIF;
-import com.runwaysdk.dataaccess.MdVertexDAOIF;
 import com.runwaysdk.dataaccess.ProgrammingErrorException;
 import com.runwaysdk.dataaccess.transaction.Transaction;
 import com.runwaysdk.session.Request;
@@ -53,7 +49,6 @@ import com.runwaysdk.session.RequestType;
 import com.runwaysdk.session.Session;
 import com.runwaysdk.session.SessionFacade;
 import com.runwaysdk.session.SessionIF;
-import com.runwaysdk.system.AbstractClassification;
 
 import net.geoprism.data.importer.FeatureRow;
 import net.geoprism.data.importer.ShapefileFunction;
@@ -71,9 +66,11 @@ import net.geoprism.registry.io.RequiredMappingException;
 import net.geoprism.registry.io.TermValueException;
 import net.geoprism.registry.jobs.RowValidationProblem;
 import net.geoprism.registry.model.BusinessObject;
+import net.geoprism.registry.model.ConceptObject;
 import net.geoprism.registry.model.GeoObjectMetadata;
 import net.geoprism.registry.model.GeoObjectTypeMetadata;
 import net.geoprism.registry.model.graph.ServerObjectVertex;
+import net.geoprism.registry.service.business.ConceptObjectBusinessServiceIF;
 import net.geoprism.registry.service.business.ObjectBusinessServiceIF;
 import net.geoprism.registry.service.business.ServiceFactory;
 import net.geoprism.registry.view.ObjectClassDTO;
@@ -517,6 +514,7 @@ public abstract class ObjectImporter<V extends ServerObjectVertex, T extends Obj
     }
     catch (Throwable t)
     {
+      t.printStackTrace();
       buildRecordException(this.getService().toDTO(businessObject), isNew, t);
     }
 
@@ -564,7 +562,10 @@ public abstract class ObjectImporter<V extends ServerObjectVertex, T extends Obj
 
     if (code != null)
     {
-      return code.toString();
+      // Codes identify objects, so leading or trailing whitespace (e.g. the
+      // '\r' left by Windows line endings) would stop a row from matching an
+      // existing object, and create a duplicate instead
+      return code.toString().trim();
     }
 
     return null;
@@ -574,37 +575,26 @@ public abstract class ObjectImporter<V extends ServerObjectVertex, T extends Obj
   {
     if (!this.configuration.isExclusion(attributeName, value.toString()))
     {
-      try
-      {
-        T type = this.configuration.getType();
-        MdVertexDAOIF mdBusiness = type.getMdVertexDAO();
-        MdAttributeClassificationDAOIF mdAttribute = (MdAttributeClassificationDAOIF) mdBusiness.definesAttribute(attributeName);
+      org.commongeoregistry.adapter.metadata.AttributeClassificationType attr = (org.commongeoregistry.adapter.metadata.AttributeClassificationType) attributeType.toDTO();
 
-        VertexObject classifier = AbstractClassification.findMatchingClassification(value.toString().trim(), mdAttribute);
+      ConceptObjectBusinessServiceIF classificationService = ServiceFactory.getBean(ConceptObjectBusinessServiceIF.class);
+      String code = value.toString().trim();
 
-        if (classifier == null)
-        {
-          throw new UnknownTermException(value.toString().trim(), attributeType.toDTO());
-        }
-        else
-        {
-          if (attributeType.getIsChangeOverTime())
-          {
-            entity.setValue(attributeName, classifier.getOid(), configuration.getStartDate(), configuration.getEndDate());
-          }
-          else
-          {
-            entity.setValue(attributeName, classifier.getOid());
-          }
-        }
-      }
-      catch (UnknownTermException e)
-      {
+      ConceptObject classifier = classificationService.getByCode(attr, code).orElseThrow(() -> {
         TermValueException ex = new TermValueException();
-        ex.setAttributeLabel(e.getAttribute().getLabel().getValue());
-        ex.setCode(e.getCode());
+        ex.setAttributeLabel(attr.getLabel().getValue());
+        ex.setCode(code);
 
-        throw e;
+        return ex;
+      });
+
+      if (attributeType.getIsChangeOverTime())
+      {
+        entity.setValue(attributeName, classifier.getVertex(), this.configuration.getStartDate(), this.configuration.getEndDate());
+      }
+      else
+      {
+        entity.setValue(attributeName, classifier.getVertex());
       }
     }
   }

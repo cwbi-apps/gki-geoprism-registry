@@ -18,12 +18,14 @@
  */
 package net.geoprism.registry.service.business;
 
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.commongeoregistry.adapter.metadata.AttributeBooleanType;
@@ -33,11 +35,13 @@ import org.springframework.stereotype.Service;
 import com.runwaysdk.RunwayException;
 import com.runwaysdk.business.SmartException;
 import com.runwaysdk.dataaccess.ProgrammingErrorException;
+import com.runwaysdk.resource.CloseableFile;
 import com.runwaysdk.system.VaultFile;
 
 import net.geoprism.registry.etl.FormatSpecificImporterFactory.FormatImporterType;
 import net.geoprism.registry.etl.JSONFormatException;
 import net.geoprism.registry.etl.ObjectImporterFactory;
+import net.geoprism.registry.etl.upload.JSONImporter;
 import net.geoprism.registry.excel.SheetDTO;
 import net.geoprism.registry.io.GeoObjectImportConfiguration;
 import net.geoprism.registry.io.view.EdgeObjectImportConfigurationDTO;
@@ -58,7 +62,9 @@ public class GraphBusinessService
 
       VaultFile vf = VaultFile.createAndApply(fileName, fileStream);
 
-      try (InputStream is = vf.openNewStream())
+      // Read the JSON the same way the import does: either the upload itself,
+      // or the JSON file in an uploaded zip
+      try (CloseableFile file = JSONImporter.getJsonFromResource(vf); InputStream is = new FileInputStream(file))
       {
         EdgeObjectImportConfigurationDTO dto = new EdgeObjectImportConfigurationDTO();
         dto.setGraphTypeClass(view.getGraphTypeClass());
@@ -136,7 +142,8 @@ public class GraphBusinessService
    * "text": [...], "numeric": [...], "date": [...] } } - Numeric keys are also
    * added to TEXT (to match your original behavior).
    */
-  private SheetDTO getSheetInformationJson(InputStream jsonStream)
+  // Package-private so that it can be tested without a database
+  SheetDTO getSheetInformationJson(InputStream jsonStream)
   {
     try
     {
@@ -204,6 +211,31 @@ public class GraphBusinessService
             break;
         }
       });
+
+      // Preview of the first few objects. Nested arrays and objects are shown as JSON.
+      for (JsonNode item : root)
+      {
+        if (sheet.sampleFull())
+        {
+          break;
+        }
+
+        if (item.isObject())
+        {
+          Map<String, String> row = new LinkedHashMap<>();
+
+          item.propertyNames().forEach(field -> {
+            JsonNode v = item.get(field);
+
+            if (v != null && !v.isNull())
+            {
+              row.put(field, v.isValueNode() ? v.asText() : v.toString());
+            }
+          });
+
+          sheet.addSampleRow(row);
+        }
+      }
 
       return sheet;
 
