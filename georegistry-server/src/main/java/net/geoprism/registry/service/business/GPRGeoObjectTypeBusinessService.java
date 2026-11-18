@@ -77,13 +77,11 @@ public class GPRGeoObjectTypeBusinessService extends GeoObjectTypeBusinessServic
   @Override
   protected void deleteInTransaction(ServerGeoObjectType type)
   {
-    super.deleteInTransaction(type);
-
     ListType.markAllAsInvalid(null, type);
-
     this.searchService.clear(type.getCode());
-
     this.markAllAsInvalid(type);
+
+    super.deleteInTransaction(type);
   }
 
   @Override

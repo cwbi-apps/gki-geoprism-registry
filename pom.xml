@@ -8,7 +8,7 @@
 
   <groupId>net.geoprism</groupId>
   <artifactId>georegistry</artifactId>
-  <version>2.0.3-SNAPSHOT</version>
+  <version>2.1.0</version>
   <packaging>pom</packaging>
 
   <name>GeoRegistry</name>
@@ -24,7 +24,7 @@
   </modules>
 
   <properties>
-    <geoprism.version>2.1.10</geoprism.version>
+    <geoprism.version>2.1.12</geoprism.version>
     <spring.boot.version>4.1.2</spring.boot.version>
     <!-- Must match the JUnit that spring-boot-starter-test brings in -->
     <junit.jupiter.version>6.0.3</junit.jupiter.version>
@@ -159,6 +159,15 @@
       <layout>default</layout>
     </repository>
     <repository>
+      <!-- GeoTools modules, e.g. gt-geopkg -->
+      <id>osgeo</id>
+      <name>OSGeo Release Repository</name>
+      <url>https://repo.osgeo.org/repository/release/</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
       <id>terraframe-public</id>
       <url>https://dl.cloudsmith.io/public/terraframe/public/maven/</url>
       <releases>
@@ -232,7 +241,7 @@
     <connection>scm:git:ssh://git@github.com/terraframe/geoprism-registry</connection>
     <developerConnection>scm:git:ssh://git@github.com/terraframe/geoprism-registry</developerConnection>
     <url>scm:git:ssh://git@github.com/terraframe/geoprism-registry</url>
-    <tag>1.1.0</tag>
+    <tag>2.1.0</tag>
   </scm>
   
   <build>

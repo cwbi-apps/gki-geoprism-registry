@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -55,6 +56,7 @@ import com.runwaysdk.dataaccess.ProgrammingErrorException;
 import com.runwaysdk.dataaccess.transaction.Transaction;
 import com.runwaysdk.resource.ApplicationResource;
 
+import net.geoprism.GenericException;
 import net.geoprism.registry.GeoRegistryUtil;
 import net.geoprism.registry.cache.TransactionCacheFacade;
 import net.geoprism.registry.graph.BusinessEdgeType;
@@ -465,6 +467,20 @@ public class XMLImporter
           {
             this.typeService.createAttributeType(type, new AttributeDateType(code, label, description, false, false, false));
           }
+          else if (elem.getTagName().equals("classification"))
+          {
+            AttributeClassificationType attributeType = new AttributeClassificationType(code, label, description, false, false, false);
+            attributeType.setConceptSet(elem.getAttribute("conceptSet"));
+            attributeType.setStartDate(GeoRegistryUtil.parseDate(elem.getAttribute("startDate")));
+            attributeType.setEndDate(GeoRegistryUtil.parseDate(elem.getAttribute("endDate")));
+
+            if (elem.hasAttribute("rootTerm"))
+            {
+              attributeType.setRootTerm(elem.getAttribute("rootTerm"));
+            }
+
+            this.typeService.createAttributeType(type, attributeType);
+          }
         }
       }
     }
@@ -513,6 +529,29 @@ public class XMLImporter
           else if (elem.getTagName().equals("date"))
           {
             service.createAttributeType(type, new AttributeDateType(code, label, description, false, false, false, false));
+          }
+          else if (elem.getTagName().equals("classification"))
+          {
+            if (type instanceof ConceptClass)
+            {
+              throw new GenericException("Concpet classes cannot have classification attributes");
+            }
+
+            // Business type attributes are not change over time unless the
+            // export says so (older exports don't record it)
+            boolean changeOverTime = Boolean.parseBoolean(elem.getAttribute("changeOverTime"));
+
+            AttributeClassificationType attributeType = new AttributeClassificationType(code, label, description, false, false, false, changeOverTime);
+            attributeType.setConceptSet(elem.getAttribute("conceptSet"));
+            attributeType.setStartDate(GeoRegistryUtil.parseDate(elem.getAttribute("startDate")));
+            attributeType.setEndDate(GeoRegistryUtil.parseDate(elem.getAttribute("endDate")));
+
+            if (elem.hasAttribute("rootTerm"))
+            {
+              attributeType.setRootTerm(elem.getAttribute("rootTerm"));
+            }
+
+            service.createAttributeType(type, attributeType);
           }
         }
       }
@@ -830,14 +869,15 @@ public class XMLImporter
       object.setRootTerm(elem.getAttribute("rootTerm"));
       object.setDiscreteType(DiscreteType.valueOf(elem.getAttribute("discreteType")));
 
+      // Multiple concept edge types and concept classes are comma separated
       if (elem.hasAttribute("conceptEdgeType"))
       {
-        object.getConceptEdgeTypes().add(elem.getAttribute("conceptEdgeType"));
+        object.getConceptEdgeTypes().addAll(this.splitCodes(elem.getAttribute("conceptEdgeType")));
       }
 
       if (elem.hasAttribute("conceptClass"))
       {
-        object.getConceptClasses().add(elem.getAttribute("conceptClass"));
+        object.getConceptClasses().addAll(this.splitCodes(elem.getAttribute("conceptClass")));
       }
 
       ConceptSet set = this.cSetService.apply(object);
@@ -848,6 +888,14 @@ public class XMLImporter
     }
 
     return Optional.empty();
+  }
+
+  private List<String> splitCodes(String value)
+  {
+    return Arrays.stream(value.split(",")) //
+        .map(String::trim) //
+        .filter(code -> code.length() > 0) //
+        .collect(Collectors.toList());
   }
 
   private void updateBusinessType(BusinessType type, Element elem)

@@ -26,6 +26,7 @@ import java.util.Set;
 
 import org.commongeoregistry.adapter.constants.DefaultAttribute;
 import org.commongeoregistry.adapter.dataaccess.LocalizedValue;
+import org.commongeoregistry.adapter.dataaccess.UnknownTermException;
 import org.commongeoregistry.adapter.metadata.AttributeBooleanType;
 import org.commongeoregistry.adapter.metadata.AttributeClassificationType;
 import org.commongeoregistry.adapter.metadata.AttributeDataSourceType;
@@ -344,7 +345,7 @@ public class UpdateValueOverTimeView
 
             ConceptObjectBusinessServiceIF service = ServiceFactory.getBean(ConceptObjectBusinessServiceIF.class);
 
-            ConceptObject classification = service.getByCode((AttributeClassificationType) attype, code).get();
+            ConceptObject classification = service.getByCode((AttributeClassificationType) attype, code).orElseThrow(() -> new UnknownTermException(code, attype));
 
             convertedValue = new AttributeGraphRef.ID(classification.getOid(), classification.getVertex().getRID());
           }

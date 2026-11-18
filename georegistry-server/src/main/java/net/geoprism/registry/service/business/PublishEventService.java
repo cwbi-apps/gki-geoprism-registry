@@ -18,7 +18,9 @@
  */
 package net.geoprism.registry.service.business;
 
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -202,11 +204,15 @@ public class PublishEventService
 
   private List<Publish> createClassificationDependencies(PublishDTO dto)
   {
+    // Multiple classification attributes may reference the same concept set
+    // over the same date range. Only process each unique combination once.
+    Set<List<Object>> seen = new HashSet<>();
+
     return dto.getGeoObjectTypes().map(code -> ServerGeoObjectType.get(code)) //
-        .map(t -> t.getAttribute(DefaultAttribute.CLASSIFICATION.getName())) //
-        .filter(a -> a.isPresent()) //
-        .map(a -> a.get()) //
+        .flatMap(t -> t.getAttributes().stream()) //
+        .filter(a -> a instanceof net.geoprism.registry.graph.AttributeClassificationType) //
         .map(a -> (AttributeClassificationType) a.toDTO()) //
+        .filter(c -> seen.add(Arrays.asList(c.getConceptSet(), c.getStartDate(), c.getEndDate()))) //
         .map(classification -> {
           ConceptSet set = this.cSetService.getByCodeOrThrow(classification.getConceptSet());
 
@@ -236,18 +242,26 @@ public class PublishEventService
             logger.info("Found existing concept set SKG - " + publish.getOid());
           }
 
+          // Remember the latest commit before attempting a new one. An empty
+          // publish can fail either after creating a commit (no relevant events
+          // in range) or before creating one (no events at all), so on failure
+          // only a commit created by this attempt may be removed. Deleting the
+          // previous commit would orphan every SKG commit that depends on it.
+          final Optional<String> previousOid = this.commitService.getLatest(publish).map(Commit::getOid);
+
           try
           {
             createNewCommit(publish);
           }
           catch (EmptyPublishException e)
           {
-            // There isn't any new data so, delete the newly created commit
-            this.commitService.getLatest(publish).ifPresent(latest -> {
-              logger.info("Removing empty concept set commit - " + latest.getOid());
+            this.commitService.getLatest(publish) //
+                .filter(latest -> !previousOid.equals(Optional.of(latest.getOid()))) //
+                .ifPresent(latest -> {
+                  logger.info("Removing empty concept set commit - " + latest.getOid());
 
-              this.commitService.delete(latest);
-            });
+                  this.commitService.delete(latest);
+                });
           }
 
           return publish;
